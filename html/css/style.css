@@ -1,0 +1,65 @@
+html {
+  overflow-y:scroll;
+}
+
+body{
+  //padding-top: 50px;
+}
+
+.pages {
+  text-align: center;
+  margin-top:30px;
+  height: 100%;
+  width: 100%;
+  //max-width: 900px;
+  margin-left: auto;
+  margin-right: auto;
+  background-color: #FFFFFF;
+}
+
+h2 {
+    margin-top: 0;
+}
+
+h3 {
+    margin-top: 15;
+    margin-left: 15px;
+    font-style: italic;
+    font-size: 125%;
+}
+
+.media-left {
+    padding-left: 25px;
+    border-collapse: collapse;
+}
+
+table, tr, th {
+    vertical-align: top;
+    max-width: 100%;
+    border-collapse: collapse;
+}
+
+th {
+    font-weight:normal;
+    padding-right 25px
+    min-width: 50px;
+}
+
+p {
+    margin-left: 25px;
+    margin-bottom: 25px;
+}
+
+.page {
+  text-align: left;
+  margin-top: 30px;
+  display: none;
+  opacity: 0;
+}
+
+.page.current {
+  text-align: left;
+  margin-top:30px;
+  display: block;
+  opacity: 1;
+}
