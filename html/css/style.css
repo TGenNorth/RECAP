@@ -8,12 +8,12 @@ body{
 
 .pages {
   text-align: center;
-  margin-top:30px;
+  margin-top:25px;
   height: 100%;
   width: 100%;
   //max-width: 900px;
-  margin-left: auto;
-  margin-right: auto;
+  //margin-left: auto;
+  //margin-right: auto;
   background-color: #FFFFFF;
 }
 
@@ -28,10 +28,6 @@ h3 {
     font-size: 125%;
 }
 
-.media-left {
-    padding-left: 25px;
-    border-collapse: collapse;
-}
 
 table, tr, th {
     vertical-align: top;
@@ -51,15 +47,34 @@ p {
 }
 
 .page {
+  margin:0;
+  padding:0;
   text-align: left;
-  margin-top: 30px;
   display: none;
-  opacity: 0;
 }
 
 .page.current {
-  text-align: left;
-  margin-top:30px;
   display: block;
-  opacity: 1;
+}
+
+.graph:nth-of-type(even) {
+  background: #f3f3f3;
+}
+
+.loading {
+    position: fixed;
+    margin: auto;
+    left: 0; right: 0; top: 0; bottom: 0;
+    width: 100px;
+    height: 100px;
+    display: none;
+    z-index: 1000;
+
+    /* The animation part: */
+    animation: spin 1500ms infinite cubic-bezier(1,1,1,1);
+}
+
+@keyframes spin {
+    from {transform:rotate(0deg);}
+    to {transform:rotate(360deg);}
 }

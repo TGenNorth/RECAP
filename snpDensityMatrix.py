@@ -57,8 +57,8 @@ class ArgParse:
     self.input.add_argument('--snvphyl', action='store_true', help='SNV Phylogenomics Pipeline')
 
     # set window size and step size
-    self.parser.add_argument('--window', default=1000, type=int, help='set size of capture window to measure snp density')
-    self.parser.add_argument('--step', default=500, type=int, help='set step size to move window down snp matrix')
+    self.parser.add_argument('--window', default=10000, type=int, help='set size of capture window to measure snp density')
+    self.parser.add_argument('--step', default=5000, type=int, help='set step size to move window down snp matrix')
     self.parser.add_argument('DIR', nargs='*', help='SNP pipeline output directory')
     self.args = self.parser.parse_args()
     self.args.window = abs(self.args.window)-1
@@ -142,7 +142,7 @@ def naspHash(DIR):
   snpPositions = snpPositions.stdout.read().split("\n")[:-1]
   for i in range(0, len(snpPositions)):
     snpPositions[i] = "::".join(snpPositions[i].split("::")[:-1]) + '\t' + snpPositions[i].split("::")[-1]
-    f.write(snpPositions[i] + "\n")
+  f.write("\n".join(snpPositions))
   f.close()
 
   # build position hash table for each contig
@@ -162,18 +162,29 @@ def naspHash(DIR):
     for j in range(1, len(samples)+1):
       hash[contig][position][0].append(line[j])
 
-  # write coverage to file
+  # write SNP coverage to files
   for i in range(1, len(samples)):
     if not os.path.exists("snpDensityOut/" + "".join(samples[i].split(" ")) + "-Depth.txt"):
       print("    creating file \"./snpDensityOut/" + "".join(samples[i].split(" ")) + "-Depth.txt\" (" + str(i) + " of " + str(len(samples) - 1) + ")")
-      coverage = subprocess.Popen("module load samtools; samtools depth -b snpDensityOut/snpPositions.txt " + DIR + "bwamem/" + samples[i] + "-bwamem.bam", universal_newlines=True, shell=True, stdout=subprocess.PIPE)
-      coverage = coverage.stdout.read()
+      coverage = subprocess.Popen("module load samtools; samtools depth -b snpDensityOut/snpPositions.txt " + DIR + "bwamem/" + samples[i] + "-bwamem.bam", universal_newlines=True, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+      coverage, coverageERR = coverage.communicate()
+
+      # if coverage is empty, BAM files are most likely missing
+      # write missing coverage as 0 depth for each missing BAM file
+      if coverage == '':
+        coverage = list(snpPositions)
+        for j in range(0, len(coverage)):
+          coverage[j] += "\t0"
+        coverage = "\n".join(coverage)
       f = open("snpDensityOut/" + "".join(samples[i].split(" ")) + "-Depth.txt", 'w')
       f.write(coverage)
       f.close()
     else:
       coverage = readFile("snpDensityOut/" + "".join(samples[i].split(" ")) + "-Depth.txt")
-    coverage = coverage.split("\n")[:-1]
+    if coverage.split("\n")[-1] == "":
+      coverage = coverage.split("\n")[:-1]
+    else:
+      coverage = coverage.split("\n")
 
     # assemble hash
     for line in coverage:
@@ -235,6 +246,7 @@ def cfsanHash(DIR):
         else:
           SNPs[line[0]][int(line[1])] = line[3]
 
+#TODO: if BAM files do not exist, then just write in 0 for the depth at each position for each sample with missing BAM files
     # write coverage to file
     if not os.path.exists("snpDensityOut/" + "".join(samples[i].split(" ")) + "-Depth.txt"):
       print("    creating file \"./snpDensityOut/" + "".join(samples[i].split(" ")) + "-Depth.txt\" (" + str(i) + " of " + str(len(samples) - 1) + ")")
@@ -329,6 +341,7 @@ def lyveHash(DIR):
       else:
         hash[contig][position][0].append(line[j])
 
+#TODO: if BAM files do not exist, then just write in 0 for the depth at each position for each sample with missing BAM files
   # write coverage to file
   for i in range(1, len(samples)):
     if not os.path.exists("snpDensityOut/" + "".join(samples[i].split(" ")) + "-Depth.txt"):
@@ -397,12 +410,12 @@ def processHash(samples, hash, windowSize, stepSize):
   contigs = sorted(list(hash.keys()))
 
   # build header
-  results = "Contig,FromPos,ToPos,Phi,AggregateDist"
-  for sampleType in ["::frequency", "::coverage"]:
-    for sample in samples[1:]:
-      results += "," + sample + sampleType
-
+  results = ["{\"samples\":","\"".join(str(samples[1:]).split("\'")),",","\"contigs\":[","]}"]
+    
+  contigList= []
   for i in range(0, len(contigs)):
+    contig = ["{\"name\":\"" + str(contigs[i]) + "\",\"data\":[","]}"]
+
     # set start and end values for hash table
     start = 1
     indexes = sorted(list(hash[contigs[i]].keys()))
@@ -445,14 +458,16 @@ def processHash(samples, hash, windowSize, stepSize):
     if max < windowSize+1:
       maxCount = 1
 
+    dataList = []
+
     # while start of window i < maximum possible hash table size
     for j in range(1, maxCount+1):
 
       # reset values for results
       if start+windowSize+1 > max:
-        string = str(contigs[i]) + "," + str(start) + "," + str(max)
+        position = [start,max]
       else:
-        string = str(contigs[i]) + "," + str(start) + "," + str(start+windowSize)
+        position = [start,start+windowSize]
       phi = "--"
       snpCount = list(snpEmpty)
       coverageCount = list(coverageEmpty)
@@ -470,50 +485,48 @@ def processHash(samples, hash, windowSize, stepSize):
         for k in range(0, len(coverageCount)):
           coverageCount[k] //= len(rangeDict[str(start)+"::"+str(start+windowSize)])
 
-        ### TODO ###
-        # 1. viciously improve run time by solving PHI
-        # 2. variable window size for phi statistic to increase capture rate of informative sites
-        # 3.
-        #tempFasta = ""
-        #for sample in samples:
-        #  tempFasta += fasta[sample][0]+'\n'+fasta[sample][1]+'\n'
-        #f = open("tempFasta.fasta", 'w')
-        #f.write(tempFasta)
-        #f.close()
-        #phi = subprocess.Popen("module load phipack/phipack; Phi -w 1 -f tempFasta.fasta", universal_newlines=True, shell=True, stdout=subprocess.PIPE)
-        #phi = str(phi.stdout.read().split(":")[-1].strip())
+# TODO:
+# 1. viciously improve run time by solving PHI
+# 2. variable window size for phi statistic to increase capture rate of informative sites
+# 3.
+        tempFasta = ""
+        for sample in samples:
+          tempFasta += fasta[sample][0]+'\n'+fasta[sample][1]+'\n'
+        f = open("tempFasta.fasta", 'w')
+        f.write(tempFasta)
+        f.close()
+        phi = subprocess.Popen("module load phipack/phipack; Phi -w 1 -f tempFasta.fasta", universal_newlines=True, shell=True, stdout=subprocess.PIPE)
+        phi = str(phi.stdout.read().split(":")[-1].strip())
 
       for sample in samples:
         fasta[sample][1] = blankSample
 
       # add all counts and coverage to results
-      string += ","+phi
-      for k in range(0, len(snpCount)): 
-        string += ","+str(snpCount[k])
-      for k in range(0, len(coverageCount)): 
-        string += ","+str(coverageCount[k])
-      results += "\n"+string
+      #string += ","+phi
+      #for k in range(0, len(snpCount)): 
+      #  string += ","+str(snpCount[k])
+      #for k in range(0, len(coverageCount)): 
+      #  string += ","+str(coverageCount[k])
+      #results += "\n"+string
+      dataList.append("{\"position\":"+"\"".join(str(position).split("\'"))+",\"phi\":\""+phi+"\",\"aggregate\":"+str(snpCount[0])+",\"SNPs\":"+str(snpCount[1:])+",\"depth\":"+str(coverageCount)+"}")
 
       if j%((maxCount//50)+1) == 0 or j == maxCount:
         echo = str("processing " + str(i+1) + " of " + str(len(contigs)) + " contigs \|" + "\u2589"*int(j/maxCount*25) + "-"*(25-int((j)/maxCount*25)) + "\| \(" + str(int((j)/maxCount*100)) + "%\)\ \ ")
         subprocess.call("echo -ne \r\'    \'" + echo, universal_newlines=True, shell=True)
-
       start += stepSize
+    contig.insert(-1, ",".join(dataList))
+    contigList.append("".join(contig))
+
+  results.insert(-1, ",".join(contigList))
+  results = "".join(results)
+
   print()
   return results
 
 #============================================================( printResults )
 def printResults(results):
   
-  f = open("snpDensityOut/snpDensityMatrix.csv", 'w')
-  f.write(results)
-  f.close()
-
-  results = results.split("\n")
-  for i in range(0, len(results)):
-    results[i] = "\"" + results[i] + "\","
-
-  results = "buildGraphs([" + "\n".join(results) + "])"
+  results = "buildGraphs(" + results + ")"
 
   f = open("snpDensityOut/snpDensityMatrix.jsonp", 'w')
   f.write(results)
@@ -551,8 +564,7 @@ def main():
   #     "{contig1: {position1: [['A', 'A', 'A', 'A', 'G'], ['42', '42', '42', '42']], position2: [['T', 'T', 'T', 'T', 'C'], ['42', '42', '42', '42']]},
   #       contig2: {position1: [['A', 'A', 'A', 'A', 'G'], ['42', '42', '42', '42']], position2: [['T', 'T', 'T', 'T', 'C'], ['42', '42', '42', '42']]}}"
 
-  ### TODO ###
-  # 1. test cfsan and lyveset with multiple contig data
+# TODO: test CFSAN and LYVEset with multiple contig data
   print("(1/3) gathering coverage from bam files")
   if args.nasp == True:
     results = naspHash(args.DIR[0])
@@ -563,9 +575,12 @@ def main():
 
   ### rolling window ###
   # example rolling window:
-  #     contig,from,to,phi,aggregate,sample1,sample2,sample3,sample4
-  #     contig1,1,1000,--,0,0,0,0,1
-  #     contig1,1001,2001,--,0,0,0,0,1
+  # {"contigs":[{"name":"gi|514064966|ref|NC_021554.1|",
+  #              "data":[{"position": [1,500],
+  #                       "phi": "--",
+  #                       "depth": [1,2,3,4,5],
+  #                       "coverage": [1,2,3,4,5]}]}]
+  # }
   results = processHash(results[0], results[1], args.window, args.step)
 
   # print results to file
