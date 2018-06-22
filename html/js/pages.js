@@ -1,8 +1,7 @@
 /*
 TODO:
   1. make custom loading image
-  3. add search option for samples & contigs
-  4. fix contigs with single position (cannot see on graph)
+  3. rebuild multi-fasta and SNP matrix files
 */
 
 // ================================================== ( Global Variables )
@@ -10,70 +9,112 @@ TODO:
 // after sorting or changing graph type for contigs, current page defaults to 0
 var maxContig = 20;
 var currentPage = 0;
+var sideWidth = 0;
 
 // variables to store imported JSON data
 var samples;
 var contigs;
+var dygraphs = {};
 
 // for current graph type on display
 var display = "snps";
+var out = [];
 
-// ================================================== ( Page Display Function )
-// handle multiple pages and navigation between them
-jQuery(document).ready(function($) {
-  // on window load (only runs once)
-  window.history.replaceState(null, null, '#1') // push to default window state (home page)
-  readData(); // read JSONP file and execute function
-  // on window state change (runs every time a navigation bar link is clicked)
-  if (window.history && window.history.replaceState) {
-    $(window).on('popstate', function() {
-      $('.loading').css('display', 'block');
-      var url = window.location.hash;
-      $(".active").removeClass("active");
-      $('.page.current').css('opacity', 0);
-      $('.page.current').removeClass('current');
-      if(url == '#1') {
-        var i=1;
-        $(".button1").addClass("active");
-      } else if(url == '#2') {
-        var i=2;
-        $(".button2").addClass("active");
-      } /*else if(url == '#3') {
-        var i=3;
-        $(".button3").addClass("active");
-      } else if(url == '#4') {
-        var i=4;
-        $(".button4").addClass("active");
-      } else if(url == '#5') {
-        var i=5;
-        $(".button5").addClass("active");
-      }*/ else if(url == "") {
-        var i=1;
-        $(".button1").addClass("active");
-      } else {
-        var i=1;
-        $(".button1").addClass("active");
-        window.history.replaceState(null, null, '#1')
-      }
-      $('.page').eq(i).addClass('current');
-      // build graphs before changing CSS
-      var timer = setTimeout(function() {
-        if (i === 2) {
-          drawContigs();
-        }
-        $('.loading').css('display', 'none');
-        $('.page.current').css('opacity', 1);
-      }, 0);
-    });
+// pulls graph page aside to reveal samples menu
+function toggleMenu() {
+  $("#sidebar-wrapper").css('width',sideWidth);
+  $("#graph-wrapper").toggleClass("toggle");
+  $("#graph-wrapper").css("left", sideWidth);
+  $("#graph-wrapper.toggle").css("left", 0);
+  $("#menu-btn").toggleClass("toggle");
+  $("#menu-btn").css("left", sideWidth+10);
+  $("#menu-btn.toggle").css("left", 10);
+  setTimeout(function(){ window.dispatchEvent(new Event('resize')); }, 250);
+  console.log(out[0])
+  console.log(contigs[0])
+}
+
+// update all graph data based on checkboxes clicked
+function updateOut() {
+  checkedSamples = CHECKBOXreturnChecked();
+  console.log(checkedSamples)
+  var max;
+  if ((currentPage*maxContig)+maxContig > contigs.length) {
+    max = contigs.length;
+  } else {
+    max = (currentPage*maxContig)+maxContig;
   }
-});
+  for (var i = currentPage*maxContig; i < max; i++) {
+    // get data for each graph object
+    out[i] = ("position");
+    if (display === "phi") {
+      out[i] += ",phi"
+    } else {
+      for (var k = 0; k < checkedSamples.length; k++) { 
+      //for (index in checkedSamples) {
+        out[i] += ","+samples[checkedSamples[k]]
+      }
+    }
+    out[i] += "\n"
+    for (var j = 0; j < contigs[i].data.length; j++) {
+      var line = "";
+      line += contigs[i].data[j].position[0];
+      if (display === "snps") {
+        for (var k = 0; k < checkedSamples.length; k++) { 
+        //for (index in checkedSamples) {
+          line += ","+contigs[i].data[j].SNPs[checkedSamples[k]]
+        }
+      } else if (display === "depth") {
+        for (var k = 0; k < checkedSamples.length; k++) { 
+        //for (index in checkedSamples) {
+          line += ","+contigs[i].data[j].depth[checkedSamples[k]]
+        }
+      } else if (display === "phi") {
+        line += ","+Number.parseFloat(contigs[i].data[j].phi)
+      }
+      out[i] += line + "\n"
+      if (contigs[i].data.length === 1) {
+        out[i] += contigs[i].data[j].position[1]+line.substr(1, line.length) + "\n"
+      }
+    }
+    dygraphs[i].updateOptions(
+      {
+        'file':out[i]
+      }
+    );
+  }
+}
+
+// ================================================== ( Data Export )
+// create download element
+function download(filename, text) {
+  var element = document.createElement('a');
+  element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(text));
+  element.setAttribute('download', filename);
+  element.style.display = 'none';
+  document.body.appendChild(element);
+  element.click();
+  document.body.removeChild(element);
+}
+
+// push data in graph range to download element
+function exportContig(i){
+  console.log(i)
+  console.log(contigs[i].name)
+  range = dygraphs[i].xAxisRange()
+  left = Math.floor(range[0])
+  right = Math.ceil(range[1])
+  console.log(left,right)
+  download("range.txt", contigs[i].name+"\n"+String(left)+"\n"+String(right))
+}
 
 // ================================================== ( Draw Contigs ) 
 // create and build all graph objects
 function drawContigs() {
   // only add data for samples that are checked off
   checkedSamples = CHECKBOXreturnChecked();
-  var out = [];
+  console.log(checkedSamples)
+  
   var max;
   if ((currentPage*maxContig)+maxContig > contigs.length) {
     max = contigs.length;
@@ -84,29 +125,24 @@ function drawContigs() {
   document.getElementById("graphs").innerHTML = ''
   for (var i = currentPage*maxContig; i < max; i++) {
     document.getElementById("graphs").innerHTML +=[
-     "  <div class='graph'>",
-     "  <div class='container-fluid'>",
-     "  <div class='row'>",
-     "    <div class='col-xs-12 col-sm-12 col-md-12'>",
-     "      <h2><font size='5'>Contig "+parseInt(i+1)+":</font><font size='4'> "+contigs[i].name+"</font></h2>",
-     "    </div>",
-     "    <div class='col-xs-12 col-sm-12 col-md-12'>",
-     "      <div id='graph"+i+"' style='margin:auto; max-width:100%; height:250px;'></div>",
-     "    </div>",
-     "    <div class='col-xs-12 col-sm-12 col-md-12'>",
-     "      <div id='legend"+i+"' style='margin:auto; height:auto; max-width:100%; font-size: small;'></div>",
-     "    </div>",
+     "<div class='graph'>",
+     "  <div class='col-12'>",
+     "    <button type='button' class='btn btn-outline-secondary btn-sm' style='top:5px;right:15px;position:absolute;' onclick='exportContig("+i+")'>Export</button>",
+     "    <font size='5'>Contig "+parseInt(i+1)+":</font><font size='4'> "+contigs[i].name+"</font>",
      "  </div>",
-     "<br>",
-     "</div>",
+     "  <div class='col-12'>",
+     "    <div id='legend"+i+"' style='margin:auto;width:100%; font-size: small;'></div>",
+     "    <div id='graph"+i+"' style='margin:auto;width:100%; height:200px;'></div>",
+     "  </div>",
      "</div>"].join('\n');
     // get data for each graph object
     out[i] = ("position");
     if (display === "phi") {
       out[i] += ",phi"
     } else {
-      for (index in checkedSamples) {
-        out[i] += ","+samples[index]
+      for (var k = 0; k < checkedSamples.length; k++) { 
+      //for (index in checkedSamples) {
+        out[i] += ","+samples[checkedSamples[k]]
       }
     }
     out[i] += "\n"
@@ -114,12 +150,14 @@ function drawContigs() {
       var line = "";
       line += contigs[i].data[j].position[0];
       if (display === "snps") {
-        for (index in checkedSamples) {
-          line += ","+contigs[i].data[j].SNPs[index]
+        for (var k = 0; k < checkedSamples.length; k++) { 
+        //for (index in checkedSamples) {
+          line += ","+contigs[i].data[j].SNPs[checkedSamples[k]]
         }
       } else if (display === "depth") {
-        for (index in checkedSamples) {
-          line += ","+contigs[i].data[j].depth[index]
+        for (var k = 0; k < checkedSamples.length; k++) { 
+        //for (index in checkedSamples) {
+          line += ","+contigs[i].data[j].depth[checkedSamples[k]]
         }
       } else if (display === "phi") {
         line += ","+Number.parseFloat(contigs[i].data[j].phi)
@@ -142,7 +180,7 @@ function drawContigs() {
   }
   // graph plugin that resets graph zoom properly on dblclick,
   // resets to [0,1] range for phi, and [null,null] for other
-  function getStuff(g) {
+  function getLowestPhi(g) {
     var lowestPhi = 0.009;
     for (var i = 0; i < g.numRows(); i++) {
       if (lowestPhi > g.getValue(i,1)) {
@@ -158,7 +196,7 @@ function drawContigs() {
           if (display === "phi") {
             e.dygraph.updateOptions({
               dateWindow: null,
-              valueRange: [1,getStuff(g)/2],
+              valueRange: [1,getLowestPhi(g)/2],
               logscale: true,
               axes: {
                 y: {
@@ -170,15 +208,15 @@ function drawContigs() {
                       { v: 0.05, label: "0.05" },
                     ]
                     // add custom ticks for phi graph formatting
-                    if (getStuff(g) < 0.01) {
+                    if (getLowestPhi(g) < 0.01) {
                       tickList.push({ v: 0.01 },{ v: 0.01, label: "0.01" })
                     }
-                    if (getStuff(g) < 0.001) {
+                    if (getLowestPhi(g) < 0.001) {
                       tickList.push({ v: 0.001 },{ v: 0.001, label: "0.001" })
                     }
-                    if (getStuff(g) < 0.0001) {
+                    if (getLowestPhi(g) < 0.0001) {
                       tickList.push({ v: 0.0001 },{ v: 0.0001, label: "< 0.0001" })
-                    } else if (getStuff(g) < 0.1) {
+                    } else if (getLowestPhi(g) < 0.1) {
                       tickList.push({ v: 0.1 },{ v: 0.1, label: "0.1" })
                     }
                     return tickList;
@@ -197,6 +235,34 @@ function drawContigs() {
       }
     }
   }
+
+  function legendFormatter(data) {
+    var legend = '<b>Position: </b>';
+    if (data.x >= 0) {
+      legend += data.x;
+    } else {
+      legend += "-"
+    }
+    var highlightTrigger = 0;
+    for (index in data.series) {
+      if (data.series[index].labelHTML != "phi") {
+        if (data.series[index].yHTML >= 0) {
+          document.getElementById("legend-"+data.series[index].labelHTML).innerHTML = data.series[index].yHTML;
+        } else {
+          document.getElementById("legend-"+data.series[index].labelHTML).innerHTML = 0;
+        }
+      }
+      if (data.series[index].isHighlighted) {
+        highlightTrigger = 1;
+        legend += '<br><b>' + data.series[index].labelHTML + ': </b>' + data.series[index].yHTML;
+      }
+    }
+    if (highlightTrigger === 0) {
+      legend += '<br><b>Sample: </b> -';
+    }
+    return legend
+  }
+
   // create each graph object
   for (var i = currentPage*maxContig; i < max; i++) {
     var g = new Dygraph(
@@ -211,13 +277,21 @@ function drawContigs() {
             axisLabelWidth: 80,
           }
         },
+        highlightCallback: function(e, x, pts, row) {
+          $('#mouseFollow').css('display','block')
+        },
+        unhighlightCallback: function(e) {
+          $('#mouseFollow').css('display','none')
+        },
         ylabel: yLabel,
         labelsShowZeroValues: true,
         labelsSeparateLines: true,
         labelsDiv: 'legend'+i,
-        legend: 'never',
+        legend: 'always',
+        legendFormatter: legendFormatter,
         valueRange: [null, null],
-        yRangePad: 1,
+        yRangePad: 5,
+        xRangePad: 5,
         digitsAfterDecimal: 3,
         animatedZooms: true,
         showRangeSelector: false,
@@ -233,7 +307,7 @@ function drawContigs() {
     // reverse y-axis for phi statistic
     if (display === "phi") {
       g.updateOptions({
-        valueRange: [1,getStuff(g)/2],
+        valueRange: [1,getLowestPhi(g)/2],
         logscale: true,
         axes: {
           y: {
@@ -245,15 +319,15 @@ function drawContigs() {
                 { v: 0.05, label: "0.05" },
               ]
               // add custom ticks for phi graph formatting
-              if (getStuff(g) < 0.01) {
+              if (getLowestPhi(g) < 0.01) {
                 tickList.push({ v: 0.01 },{ v: 0.01, label: "0.01" })
               }
-              if (getStuff(g) < 0.001) {
+              if (getLowestPhi(g) < 0.001) {
                 tickList.push({ v: 0.001 },{ v: 0.001, label: "0.001" })
               }
-              if (getStuff(g) < 0.0001) {
+              if (getLowestPhi(g) < 0.0001) {
                 tickList.push({ v: 0.0001 },{ v: 0.0001, label: "< 0.0001" })
-              } else if (getStuff(g) < 0.1) {
+              } else if (getLowestPhi(g) < 0.1) {
                 tickList.push({ v: 0.1 },{ v: 0.1, label: "0.1" })
               }
               return tickList;
@@ -262,7 +336,7 @@ function drawContigs() {
         },
         // highlight portions of graph where phi statistic is under 0.05 "statistically significant"
         underlayCallback: function(canvas, area, g) {
-          canvas.fillStyle = "rgba(255, 216, 0, 0.5)";
+          canvas.fillStyle = "rgba(0, 255, 216, 0.3)";
           function highlight(start, end) {
             var left = g.toDomXCoord(start);
             var right = g.toDomXCoord(end);
@@ -294,11 +368,11 @@ function drawContigs() {
         }
       });
     }
+    dygraphs[i] = g
   }
   // build all interactive buttons
-  if (contigs.length > 5) {
-    buildQuantity();
-  }
+  
+  buildQuantity();
   buildDisplay();
   buildSort();
   buildNavigation();
@@ -547,6 +621,7 @@ function CHECKBOXselectAll() {
   for (var i = 0; i < samples.length; i++) {
     document.getElementById("CHECKBOX-samples"+samples[i]).checked = true;
   }
+  updateOut();
 }
 
 // select no samples
@@ -554,6 +629,7 @@ function CHECKBOXselectNone() {
   for (var i = 0; i < samples.length; i++) {
     document.getElementById("CHECKBOX-samples"+samples[i]).checked = false;
   }
+  updateOut();
 }
 
 // return list of only selected samples
@@ -566,11 +642,6 @@ function CHECKBOXreturnChecked() {
     }
   }
   return checkedSamples;
-}
-
-// ================================================== ( download file )
-function thing() {
-  console.log("hello");
 }
 
 // ================================================== ( Process JSON )
@@ -594,6 +665,22 @@ function buildGraphs(data) {
   });
   contigs = data.contigs;
   for (var i = 0; i < data.samples.length; i++) {
-    document.getElementById("SETTINGS-samples").innerHTML += '<input type="checkbox" id="CHECKBOX-samples'+data.samples[i]+'" checked> '+data.samples[i]+'<br>'
+    document.getElementById("SETTINGS-samples").innerHTML += '<input type="checkbox" id="CHECKBOX-samples'+data.samples[i]+'" onclick="updateOut()" checked> '+data.samples[i]+': <div style="display:inline-block;" id="legend-'+data.samples[i]+'">0</div><br>';
   }
+  sideWidth = $("#sidebar-wrapper").width() + 30;
+  drawContigs()
 }
+
+// main function runs on page load
+jQuery(document).ready(function($) {
+  readData();
+});
+
+
+
+
+
+
+
+
+

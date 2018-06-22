@@ -1,0 +1,75 @@
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: hidden;
+}
+
+#sidebar-wrapper {
+  left:0;
+  //box-shadow: inset -10px 0px 50px #000;
+  position: absolute;
+  width: auto;
+  height: 100%;
+  overflow-y: auto;
+  background: linear-gradient(to right,#fff,#eee);
+}
+
+#graph-wrapper {
+  z-index: 1000;
+  border-left: 1px solid darkgray;
+  padding-top: 10px;
+  height: 100%;
+  overflow-y: auto;
+  background: #fff;
+  width: auto;
+  position: absolute;
+  right: 0;
+  left: 0;
+  -webkit-transition: all 0.2s ease;
+  -moz-transition: all 0.2s ease;
+  -o-transition: all 0.2s ease;
+  transition: all 0.2s ease;
+}
+
+#menu-btn {
+  left: 10px;
+  top: 10px;
+  position: absolute;
+  z-index: 2000;
+  -webkit-transition: all 0.2s ease;
+  -moz-transition: all 0.2s ease;
+  -o-transition: all 0.2s ease;
+  transition: all 0.2s ease;
+}
+
+.graph {                                                                                                                                                 
+  padding-bottom: 5px;
+}
+
+.graph:nth-of-type(even) {
+  background: #eee;
+}
+
+#graphs {
+  width: auto;
+}
+
+.loading {
+    position: fixed;
+    margin: auto;
+    left: 0; right: 0; top: 0; bottom: 0;
+    width: 100px;
+    height: 100px;
+    display: none;
+    z-index: 1000;
+    /* The animation part: */
+    animation: spin 1500ms infinite cubic-bezier(1,1,1,1);
+}
+
+@keyframes spin {
+    from {transform:rotate(0deg);}
+    to {transform:rotate(360deg);}
+}
+

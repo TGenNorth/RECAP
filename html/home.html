@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html>
+
   <head>
+    <title>snpDensityMatix</title>
 
     <!-- Dygraph.js -->
     <script src="./js/dygraph.min.js"></script>
@@ -9,98 +11,36 @@
 
     <!-- CSS -->
     <link href="./css/bootstrap.min.css" rel="stylesheet">
-    <link href="./css/style.css" rel="stylesheet">
+    <link href="./css/sidebar.css" rel="stylesheet">
 
     <!-- Javascript -->
     <script src="./js/jquery.min.js"></script>
     <script src="./js/pages.js"></script>
     <script src="./js/popper.min.js"></script>
     <script src="./js/bootstrap.min.js"></script>
-    
-    <title>snpDensityMatix</title>
   </head>
+
   <body>
 
-    <!-- Navigation -->
-    <nav class="navbar sticky-top navbar-expand-md navbar-dark bg-dark">
-      <!-- <a class="navbar-brand" href="#1">Home</a> -->
-      <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
-        <span class="navbar-toggler-icon"></span>
-      </button>
-      <div class="collapse navbar-collapse" id="navbarSupportedContent">
-        <ul class="navbar-nav mr-auto">
-          <li class="button1 active">
-            <a class="nav-link" href="./home.html#1">Settings</a>
-          </li>
-          <li class="button2">
-            <a class="nav-link" href="./home.html#2">Contigs</a>
-          </li>
-         <!--  <li class="button3">
-            <a class="nav-link" href="./home.html#3">3</a>
-          </li>
-          <li class="button4">
-            <a class="nav-link" href="./home.html#4">4</a>
-          </li>
-          <li class="button5">
-            <a class="nav-link" href="./home.html#5">5</a>
-          </li> -->
-        </ul>
-      </div>  
-    </nav>
-
-    <!-- Pages -->
-    <div class="pages">
-
-      <!-- header -->
-      <img class="loading" src="images/loading.png">
-      <!-- <h3><img src="./images/tgenLogo.png" style="width: 100%; max-width: 200px; text-align: center;"></h3> -->
-
-      <!-- DEFAUT: LEAVE BLANK -->
-      <div class="page" style="opacity: 0;">
-      </div>
-
-      <!-- page 1 -->
-      <div class="page current">
-        <center><button type="button" class="btn btn-outline-primary btn-sm" onclick="thing()">Thing!!!</button></center>
-        <div class="container-fluid">
-          <div class="row">
-            <div class="col-6">
-              <h2>Samples:</h2>
-              <div class="row">
-                <div class="col-12">
-                  <button type="button" class="btn btn-outline-primary btn-sm" onclick="CHECKBOXselectAll()">Select All</button>
-                  <button type="button" class="btn btn-outline-primary btn-sm" onclick="CHECKBOXselectNone()">Select None</button>
-                </div>
-              </div>
-              <div id="SETTINGS-samples"></div>
-            </div>
-          </div>
+    <button type="button" id="menu-btn" class="btn btn-secondary btn-sm toggle" onclick="toggleMenu()">☰</button>
+    <!-- sidebar for samples menu -->
+    <div id="sidebar-wrapper" style="white-space:nowrap;">
+        <div style="padding:10px;">
+        <font size='5'>Samples:</font><br>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="CHECKBOXselectAll()">Select All</button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="CHECKBOXselectNone()">Select None</button>
+        <div id="SETTINGS-samples"></div>
         </div>
-      </div>
-
-      <!-- page 2 -->
-      <div class="page">
-        <ul id="CONTIG-options" class="pagination pagination-sm justify-content-center"></ul>
-        <ul id="CONTIG-navigation" style="white-space: nowrap;" class="pagination pagination-sm justify-content-center"></ul>
-        <div id="graphs"></div>
-        <br>
-        <ul id="CONTIG-navigationBottom" style="white-space: nowrap;" class="pagination pagination-sm justify-content-center"></ul>
-      </div>
-
-      <!-- page 3 -->
-      <div class="page"><center><h1>Page 3</h1></center>
-      </div>
-
-      <!-- page 4 -->
-      <div class="page"><center><h1>Page 4</h1></center>
-      </div>
-
-      <!-- page 5 -->
-      <div class="page"><center><h1>Page 5</h1></center>
-      </div>
-
-      <!-- footer -->
-      <br>
     </div>
+
+    <!-- page for graphs -->
+    <div id="graph-wrapper" class="toggle">
+        <img class="loading" src="images/loading.png">
+          <ul id="CONTIG-options" class="pagination pagination-sm justify-content-center"></ul>
+          <ul id="CONTIG-navigation" style="white-space: nowrap;" class="pagination pagination-sm justify-content-center"></ul>
+          <div id="graphs"></div><br>
+          <ul id="CONTIG-navigationBottom" style="white-space: nowrap;" class="pagination pagination-sm justify-content-center"></ul>
+      </div>
   </body>
+
 </html>
