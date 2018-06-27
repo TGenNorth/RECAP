@@ -30,14 +30,12 @@ function toggleMenu() {
   $("#menu-btn").css("left", sideWidth+10);
   $("#menu-btn.toggle").css("left", 10);
   setTimeout(function(){ window.dispatchEvent(new Event('resize')); }, 250);
-  console.log(out[0])
-  console.log(contigs[0])
 }
 
+// ================================================== ( Update Graphs )
 // update all graph data based on checkboxes clicked
 function updateOut() {
   checkedSamples = CHECKBOXreturnChecked();
-  console.log(checkedSamples)
   var max;
   if ((currentPage*maxContig)+maxContig > contigs.length) {
     max = contigs.length;
@@ -99,13 +97,10 @@ function download(filename, text) {
 
 // push data in graph range to download element
 function exportContig(i){
-  console.log(i)
-  console.log(contigs[i].name)
   range = dygraphs[i].xAxisRange()
   left = Math.floor(range[0])
   right = Math.ceil(range[1])
-  console.log(left,right)
-  download("range.txt", contigs[i].name+"\n"+String(left)+"\n"+String(right))
+  download("range.txt", contigs[i].name+"\t"+String(left)+"\t"+String(right))
 }
 
 // ================================================== ( Draw Contigs ) 
@@ -113,7 +108,6 @@ function exportContig(i){
 function drawContigs() {
   // only add data for samples that are checked off
   checkedSamples = CHECKBOXreturnChecked();
-  console.log(checkedSamples)
   
   var max;
   if ((currentPage*maxContig)+maxContig > contigs.length) {
@@ -128,7 +122,7 @@ function drawContigs() {
      "<div class='graph'>",
      "  <div class='col-12'>",
      "    <button type='button' class='btn btn-outline-secondary btn-sm' style='top:5px;right:15px;position:absolute;' onclick='exportContig("+i+")'>Export</button>",
-     "    <font size='5'>Contig "+parseInt(i+1)+":</font><font size='4'> "+contigs[i].name+"</font>",
+     "    <font size='5'>Contig "+parseInt(i+1)+":</font><font size='4'> <span id='link' onclick='console.log("+i+")'>"+contigs[i].name+"</span></font>",
      "  </div>",
      "  <div class='col-12'>",
      "    <div id='legend"+i+"' style='margin:auto;width:100%; font-size: small;'></div>",

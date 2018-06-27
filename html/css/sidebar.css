@@ -6,6 +6,11 @@ html, body {
   overflow-y: hidden;
 }
 
+#link{
+  cursor:pointer;
+  color:blue;
+}
+
 #sidebar-wrapper {
   left:0;
   //box-shadow: inset -10px 0px 50px #000;

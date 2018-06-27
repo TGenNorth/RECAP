@@ -417,8 +417,10 @@ def processHash(samples, hash, windowSize, stepSize):
     contig = ["{\"name\":\"" + str(contigs[i]) + "\",\"data\":[","]}"]
 
     # set start and end values for hash table
-    start = 1
     indexes = sorted(list(hash[contigs[i]].keys()))
+    start = 1
+    while start + stepSize < indexes[0]:
+      start += stepSize
     max = indexes[-1]
     # sort all of the hash keys into window ranges
     rangeDict = {}
@@ -461,8 +463,7 @@ def processHash(samples, hash, windowSize, stepSize):
     dataList = []
 
     # while start of window i < maximum possible hash table size
-    for j in range(1, maxCount+1):
-
+    for j in range(((start-windowSize-1)//stepSize)+1, maxCount+1):
       # reset values for results
       if start+windowSize+1 > max:
         position = [start,max]
