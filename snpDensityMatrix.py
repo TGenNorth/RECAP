@@ -28,6 +28,7 @@ import math
 
 # for python string substitution
 import re
+from collections import Counter
 
 # for getting time taken for jobs
 import time
@@ -36,8 +37,11 @@ import time
 import subprocess
 import os
 
+# for getting the phi statistic
+import phiStat
+
 #==================================================================================================== ( classes )
-#============================================================( getArgs )
+#------------------------------------------------------------( getArgs )
 ### parse and return all arguments to NAMESPACE
 # all arguments are collected from command line
 #
@@ -71,7 +75,7 @@ class ArgParse:
     self.parser.print_help()
     exit()
 
-#============================================================( jobTimer )
+#------------------------------------------------------------( jobTimer )
 ### allows for tracking the length of time for running a certain job
 # sets object creation time, returns difference between creation and current time
 #
@@ -107,7 +111,7 @@ class JobTimer:
     print("====================( Total Time: " + str(self.days) + ":" + str(self.hours) + ":" + str(self.minutes) + ":" + str(self.seconds) + " )")
 
 #==================================================================================================== ( helper functions )
-#============================================================( readFile )
+#------------------------------------------------------------( readFile )
 def readFile(file):
 
   inFile = []
@@ -123,7 +127,7 @@ def readFile(file):
 
   return file
 
-#============================================================( naspCoverage )
+#------------------------------------------------------------( naspCoverage )
 def naspHash(DIR):
 
   # open "matrices/bestsnp.tsv"
@@ -193,7 +197,7 @@ def naspHash(DIR):
 
   return [samples, hash]
 
-#============================================================( cfsanHash )
+#------------------------------------------------------------( cfsanHash )
 def cfsanHash(DIR):
 
   # get sample names
@@ -295,7 +299,7 @@ def cfsanHash(DIR):
 
   return [samples, hash]
 
-#============================================================( lyveHash )
+#------------------------------------------------------------( lyveHash )
 def lyveHash(DIR):
 
   # open "matrices/bestsnp.tsv"
@@ -396,12 +400,12 @@ def lyveHash(DIR):
 
   return [samples, hash]
  
-#============================================================( snpPHYL )
+#------------------------------------------------------------( snpPHYL )
   ### TODO ###
   # 1. support snpPHYL output
   exit()
 
-#============================================================( processHash )
+#------------------------------------------------------------( processHash )
 def processHash(samples, hash, windowSize, stepSize):
 
   # process hash table
@@ -469,7 +473,7 @@ def processHash(samples, hash, windowSize, stepSize):
         position = [start,max]
       else:
         position = [start,start+windowSize]
-      phi = "--"
+      phi = 1.0
       snpCount = list(snpEmpty)
       coverageCount = list(coverageEmpty)
 
@@ -486,34 +490,26 @@ def processHash(samples, hash, windowSize, stepSize):
         for k in range(0, len(coverageCount)):
           coverageCount[k] //= len(rangeDict[str(start)+"::"+str(start+windowSize)])
 
-# TODO:
-# 1. viciously improve run time by solving PHI
-# 2. variable window size for phi statistic to increase capture rate of informative sites
-# 3.
-        tempFasta = ""
-        for sample in samples:
-          tempFasta += fasta[sample][0]+'\n'+fasta[sample][1]+'\n'
-        f = open("tempFasta.fasta", 'w')
-        f.write(tempFasta)
-        f.close()
-        phi = subprocess.Popen("module load phipack/phipack; Phi -w 1 -f tempFasta.fasta", universal_newlines=True, shell=True, stdout=subprocess.PIPE)
-        phi = str(phi.stdout.read().split(":")[-1].strip())
+        if len(samples) >= 4 and len(fasta[samples[0]][1]) >= 5:
+          tempFasta = ""
+          for sample in samples:
+            tempFasta += fasta[sample][0]+'\n'+fasta[sample][1]+'\n'
+            #f = open("tempFasta.fasta", 'w')
+            #f.write(tempFasta)
+            #f.close()
+            #phi = subprocess.Popen("module load phipack/phipack; Phi -f tempFasta.fasta", universal_newlines=True, shell=True, stdout=subprocess.PIPE)
+            #phi = str(phi.stdout.read().split(":")[-1].strip())
+          phi = phiStat.fasta(tempFasta)
 
       for sample in samples:
         fasta[sample][1] = blankSample
 
-      # add all counts and coverage to results
-      #string += ","+phi
-      #for k in range(0, len(snpCount)): 
-      #  string += ","+str(snpCount[k])
-      #for k in range(0, len(coverageCount)): 
-      #  string += ","+str(coverageCount[k])
-      #results += "\n"+string
-      dataList.append("{\"position\":"+"\"".join(str(position).split("\'"))+",\"phi\":\""+phi+"\",\"aggregate\":"+str(snpCount[0])+",\"SNPs\":"+str(snpCount[1:])+",\"depth\":"+str(coverageCount)+"}")
+      dataList.append("{\"position\":"+"\"".join(str(position).split("\'"))+",\"phi\":\""+str(phi)+"\",\"aggregate\":"+str(snpCount[0])+",\"SNPs\":"+str(snpCount[1:])+",\"depth\":"+str(coverageCount)+"}")
 
-      if j%((maxCount//50)+1) == 0 or j == maxCount:
+      if j%((maxCount//50)+1) == 0 and j > 0 or j == maxCount and j > 0:
         echo = str("processing " + str(i+1) + " of " + str(len(contigs)) + " contigs \|" + "\u2589"*int(j/maxCount*25) + "-"*(25-int((j)/maxCount*25)) + "\| \(" + str(int((j)/maxCount*100)) + "%\)\ \ ")
         subprocess.call("echo -ne \r\'    \'" + echo, universal_newlines=True, shell=True)
+
       start += stepSize
     contig.insert(-1, ",".join(dataList))
     contigList.append("".join(contig))
@@ -524,7 +520,7 @@ def processHash(samples, hash, windowSize, stepSize):
   print()
   return results
 
-#============================================================( printResults )
+#------------------------------------------------------------( printResults )
 def printResults(results):
   
   results = "buildGraphs(" + results + ")"
@@ -536,13 +532,12 @@ def printResults(results):
   return
 
 #==================================================================================================== ( main )
-#============================================================( main )
+#------------------------------------------------------------( main )
 ###### parse arguments and run program
-
 def main():
 
-  print("\n====================( Job Starting: "+sys.argv[0]+" )")
   # time length of script
+  print("\n====================( Job Starting: "+sys.argv[0]+" )")
   timer = JobTimer()
 
   # parse all arguments on initial call
@@ -555,6 +550,7 @@ def main():
     os.mkdir("snpDensityOut")
     for file in os.listdir("/".join(sys.argv[0].split("/")[:-1]) + "/html"):
       subprocess.call("cp -r " + "/".join(sys.argv[0].split("/")[:-1]) + "/html/" + file + " snpDensityOut/" + file, universal_newlines=True, shell=True)
+
   ### build hash table ###
   # samplePositions.txt format:
   #     contig1 position1
@@ -565,7 +561,6 @@ def main():
   #     "{contig1: {position1: [['A', 'A', 'A', 'A', 'G'], ['42', '42', '42', '42']], position2: [['T', 'T', 'T', 'T', 'C'], ['42', '42', '42', '42']]},
   #       contig2: {position1: [['A', 'A', 'A', 'A', 'G'], ['42', '42', '42', '42']], position2: [['T', 'T', 'T', 'T', 'C'], ['42', '42', '42', '42']]}}"
 
-# TODO: test CFSAN and LYVEset with multiple contig data
   print("(1/3) gathering coverage from bam files")
   if args.nasp == True:
     results = naspHash(args.DIR[0])
@@ -573,6 +568,7 @@ def main():
     results = cfsanHash(args.DIR[0])
   elif args.lyve == True:
     results = lyveHash(args.DIR[0])
+  results = processHash(results[0], results[1], args.window, args.step)
 
   ### rolling window ###
   # example rolling window:
@@ -582,7 +578,6 @@ def main():
   #                       "depth": [1,2,3,4,5],
   #                       "coverage": [1,2,3,4,5]}]}]
   # }
-  results = processHash(results[0], results[1], args.window, args.step)
 
   # print results to file
   print("(3/3) writing results csv file")
@@ -592,7 +587,7 @@ def main():
   timer.getTime()
   print("====================( Job Complete: "+sys.argv[0]+" )\n")
 
-#============================================================( run main )
+#------------------------------------------------------------( run main )
 ###### runMain
 if __name__ == "__main__":
   main()
