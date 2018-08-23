@@ -170,12 +170,19 @@ def naspHash(DIR):
   for i in range(1, len(samples)):
     if not os.path.exists("snpDensityOut/" + "".join(samples[i].split(" ")) + "-Depth.txt"):
       print("    creating file \"./snpDensityOut/" + "".join(samples[i].split(" ")) + "-Depth.txt\" (" + str(i) + " of " + str(len(samples) - 1) + ")")
-      coverage = subprocess.Popen("module load samtools; samtools depth -b snpDensityOut/snpPositions.txt " + DIR + "bwamem/" + samples[i] + "-bwamem.bam", universal_newlines=True, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-      coverage, coverageERR = coverage.communicate()
 
-      # if coverage is empty, BAM files are most likely missing
-      # write missing coverage as 0 depth for each missing BAM file
-      if coverage == '':
+      # get depth from BAM file (faster than VCF)
+      if os.path.exists(DIR + "bwamem/" + samples[i] + "-bwamem.bam"):
+        coverage = subprocess.Popen("module load samtools; samtools depth -b snpDensityOut/snpPositions.txt " + DIR + "bwamem/" + samples[i] + "-bwamem.bam", universal_newlines=True, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        coverage, coverageERR = coverage.communicate()
+
+      # if no BAM file, get depth from VCF file
+      elif os.path.exists(DIR + "gatk/" + samples[i] + "-bwamem-gatk.vcf"):
+        coverage = subprocess.Popen("module load vcftools; vcftools --vcf " + DIR + "gatk/" + samples[i] + "-bwamem-gatk.vcf --positions snpDensityOut/snpPositions.txt --site-depth --stdout | awk 'NR > 1 {print $1 \"\t\" $2 \"\t\" $3}'", universal_newlines=True, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        coverage, coverageERR = coverage.communicate()
+
+      # if no BAM or VCF file, then write in coverage as 0
+      else:
         coverage = list(snpPositions)
         for j in range(0, len(coverage)):
           coverage[j] += "\t0"
@@ -250,30 +257,46 @@ def cfsanHash(DIR):
         else:
           SNPs[line[0]][int(line[1])] = line[3]
 
-#TODO: if BAM files do not exist, then just write in 0 for the depth at each position for each sample with missing BAM files
     # write coverage to file
     if not os.path.exists("snpDensityOut/" + "".join(samples[i].split(" ")) + "-Depth.txt"):
       print("    creating file \"./snpDensityOut/" + "".join(samples[i].split(" ")) + "-Depth.txt\" (" + str(i) + " of " + str(len(samples) - 1) + ")")
       coverage = {}
-      read = subprocess.Popen("module load samtools; samtools depth -b snpDensityOut/snpPositions.txt " + DIR + "/" + samples[i] + "/reads.sorted.bam", universal_newlines=True, shell=True, stdout=subprocess.PIPE)
-      read = read.stdout.read().split("\n")[:-1]
-      for line in read:
-        line = line.split("\t")
-        if line[0] not in coverage:
-          coverage[line[0]] = {}
-        if int(line[1]) not in coverage[line[0]]:
-          coverage[line[0]][int(line[1])] = 0
-        coverage[line[0]][int(line[1])] += int(line[2])
-      coverageOut = ""
-      for contig in sorted(list((coverage.keys()))):
-        for position in sorted(list((coverage[contig].keys()))):
-          coverageOut += "\t".join([contig,str(position),str(coverage[contig][position])]) + "\n"
+
+      # get depth from BAM file
+      if os.path.exists(DIR + "/" + samples[i] + "/reads.sorted.bam"):
+        read = subprocess.Popen("module load samtools; samtools depth -b snpDensityOut/snpPositions.txt " + DIR + "/" + samples[i] + "/reads.sorted.bam", universal_newlines=True, shell=True, stdout=subprocess.PIPE)
+        read = read.stdout.read().split("\n")[:-1]
+        for line in read:
+          line = line.split("\t")
+          if line[0] not in coverage:
+            coverage[line[0]] = {}
+          if int(line[1]) not in coverage[line[0]]:
+            coverage[line[0]][int(line[1])] = 0
+          coverage[line[0]][int(line[1])] += int(line[2])
+        coverageOut = ""
+        for contig in sorted(list((coverage.keys()))):
+          for position in sorted(list((coverage[contig].keys()))):
+            coverageOut += "\t".join([contig,str(position),str(coverage[contig][position])]) + "\n"
+
+      # if no BAM file, then write in coverage as 0
+      else:
+        coverageOut = list(snpPositions)
+        for j in range(0, len(coverageOut)):
+          coverageOut[j] += "\t0"
+          line = coverageOut[j].split("\t")
+          if line[0] not in coverage:
+            coverage[line[0]] = {}
+          if int(line[1]) not in coverage[line[0]]:
+            coverage[line[0]][int(line[1])] = 0
+          coverage[line[0]][int(line[1])] += int(line[2])
+        coverageOut = "\n".join(coverageOut)
+
       f = open("snpDensityOut/" + "".join(samples[i].split(" ")) + "-Depth.txt", 'w')
       f.write(coverageOut)
       f.close()
-    else:
 
-      # read coverage from file and build coverage hash table
+    # read coverage from file and build coverage hash table
+    else:
       read = readFile("snpDensityOut/" + "".join(samples[i].split(" ")) + "-Depth.txt")
       read = read.split("\n")[:-1]
       coverage = {}
@@ -286,6 +309,7 @@ def cfsanHash(DIR):
         coverage[line[0]][int(line[1])] = int(line[2])
 
     # add SNP data to hash table
+    # if SNP information is missing, add 0 to hash
     for contig in sorted(list(hash.keys())):
       for position in sorted(list(hash[contig].keys())):
         if int(position) not in SNPs[contig].keys():
@@ -345,7 +369,6 @@ def lyveHash(DIR):
       else:
         hash[contig][position][0].append(line[j])
 
-#TODO: if BAM files do not exist, then just write in 0 for the depth at each position for each sample with missing BAM files
   # write coverage to file
   for i in range(1, len(samples)):
     if not os.path.exists("snpDensityOut/" + "".join(samples[i].split(" ")) + "-Depth.txt"):
@@ -355,10 +378,28 @@ def lyveHash(DIR):
       # get coverage from both forward and backwards bam files
       bam = subprocess.Popen("ls " + DIR + "bam/" + samples[i] + "*.bam", universal_newlines=True, shell=True, stdout=subprocess.PIPE)
       bam = bam.stdout.read().split("\n")[:-1]
-      coverage1 = subprocess.Popen("module load samtools; samtools depth -b snpDensityOut/snpPositions.txt " + bam[0], universal_newlines=True, shell=True, stdout=subprocess.PIPE)
-      coverage1 = coverage1.stdout.read().split("\n")[:-1]
-      coverage2 = subprocess.Popen("module load samtools; samtools depth -b snpDensityOut/snpPositions.txt " + bam[1], universal_newlines=True, shell=True, stdout=subprocess.PIPE)
-      coverage2 = coverage2.stdout.read().split("\n")[:-1]
+
+      if bam != []:
+        coverage1 = subprocess.Popen("module load samtools; samtools depth -b snpDensityOut/snpPositions.txt " + bam[0], universal_newlines=True, shell=True, stdout=subprocess.PIPE)
+        coverage1 = coverage1.stdout.read().split("\n")[:-1]
+        coverage2 = subprocess.Popen("module load samtools; samtools depth -b snpDensityOut/snpPositions.txt " + bam[1], universal_newlines=True, shell=True, stdout=subprocess.PIPE)
+        coverage2 = coverage2.stdout.read().split("\n")[:-1]
+
+      else:
+        vcf = subprocess.Popen("ls " + DIR + "vcf/" + samples[i] + "*.vcf.gz", universal_newlines=True, shell=True, stdout=subprocess.PIPE)
+        vcf = vcf.stdout.read().split("\n")[:-1]
+
+        if vcf != []:
+          coverage1 = subprocess.Popen("module load vcftools; vcftools --gzvcf " + vcf[0] + " --positions snpDensityOut/snpPositions.txt --site-depth --stdout | awk 'NR > 1 {print $1 \"\t\" $2 \"\t\" $3}'", universal_newlines=True, shell=True, stdout=subprocess.PIPE)
+          coverage1 = coverage1.stdout.read().split("\n")[:-1]
+          coverage2 = subprocess.Popen("module load vcftools; vcftools --gzvcf " + vcf[1] + " --positions snpDensityOut/snpPositions.txt --site-depth --stdout | awk 'NR > 1 {print $1 \"\t\" $2 \"\t\" $3}'", universal_newlines=True, shell=True, stdout=subprocess.PIPE)
+          coverage2 = coverage2.stdout.read().split("\n")[:-1]
+
+        else:
+          coverage1 = list(snpPositions) 
+          for j in range(0, len(coverage1)):
+            coverage1[j] += "\t0"
+          coverage2 = list(coverage1)
 
       # build coverage hash table and save coverage to file
       for read in [coverage1, coverage2]:
@@ -426,6 +467,7 @@ def processHash(samples, hash, windowSize, stepSize):
     while start + stepSize < indexes[0]:
       start += stepSize
     max = indexes[-1]
+
     # sort all of the hash keys into window ranges
     rangeDict = {}
     for index in indexes:
@@ -561,7 +603,7 @@ def main():
   #     "{contig1: {position1: [['A', 'A', 'A', 'A', 'G'], ['42', '42', '42', '42']], position2: [['T', 'T', 'T', 'T', 'C'], ['42', '42', '42', '42']]},
   #       contig2: {position1: [['A', 'A', 'A', 'A', 'G'], ['42', '42', '42', '42']], position2: [['T', 'T', 'T', 'T', 'C'], ['42', '42', '42', '42']]}}"
 
-  print("(1/3) gathering coverage from bam files")
+  print("(1/3) gathering coverage from BAM/VCF files")
   if args.nasp == True:
     results = naspHash(args.DIR[0])
   elif args.cfsan == True:
