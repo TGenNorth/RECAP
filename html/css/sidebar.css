@@ -11,46 +11,75 @@ html, body {
   color:blue;
 }
 
+#bottombar-wrapper {
+  z-index: 99;
+  border-top: 2px solid darkgray;
+  position: absolute;
+  width: 100%;
+  height: auto;
+  overflow-y: auto;
+  background: #fff;
+  -webkit-transition: all 0.4s ease;
+  -moz-transition: all 0.4s ease;
+  -o-transition: all 0.4s ease;
+  transition: all 0.4s ease;
+}
+
 #sidebar-wrapper {
   left:0;
-  //box-shadow: inset -10px 0px 50px #000;
   position: absolute;
   width: auto;
   height: 100%;
   overflow-y: auto;
-  background: linear-gradient(to right,#fff,#eee);
+  background: linear-gradient(to left,#eee,#fff);
 }
 
 #graph-wrapper {
-  z-index: 1000;
-  border-left: 1px solid darkgray;
+  z-index: 100;
   padding-top: 10px;
   height: 100%;
   overflow-y: auto;
   background: #fff;
-  width: auto;
   position: absolute;
   right: 0;
   left: 0;
-  -webkit-transition: all 0.2s ease;
-  -moz-transition: all 0.2s ease;
-  -o-transition: all 0.2s ease;
-  transition: all 0.2s ease;
+}
+
+#main-wrapper {
+  height: 100%;
+  border-left: 2px solid darkgray;
+  position: absolute;
+  right: 0;
+  left: 0;
+  -webkit-transition: all 0.25s ease;
+  -moz-transition: all 0.25s ease;
+  -o-transition: all 0.25s ease;
+  transition: all 0.25s ease;
+}
+
+#dark-overlay {
+  z-index: 99;
+  position: absolute;
+  height: 100%;
+  width: 100%;
+  background-color: black;
+  opacity: 0;
+  -webkit-transition: all 0.4s ease;
+  -moz-transition: all 0.4s ease;
+  -o-transition: all 0.4s ease;
+  transition: all 0.4s ease;
 }
 
 #menu-btn {
+  z-index: 300;
   left: 10px;
   top: 10px;
   position: absolute;
-  z-index: 2000;
-  -webkit-transition: all 0.2s ease;
-  -moz-transition: all 0.2s ease;
-  -o-transition: all 0.2s ease;
-  transition: all 0.2s ease;
+  border: 2px solid #ddd;
 }
 
-.graph {                                                                                                                                                 
-  padding-bottom: 5px;
+.graph {
+  padding-bottom: 10px;
 }
 
 .graph:nth-of-type(even) {
@@ -58,7 +87,7 @@ html, body {
 }
 
 #graphs {
-  width: auto;
+  width: 100%;
 }
 
 .loading {

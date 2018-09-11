@@ -25,6 +25,7 @@
 import sys
 import argparse
 import math
+import threading
 
 # for python string substitution
 import re
@@ -51,7 +52,7 @@ class ArgParse:
   def __init__(self):
 
     # initialize argument parser
-    self.parser=argparse.ArgumentParser(usage='''%(prog)s [-h, --help] [ --nasp | --cfsan | --lyve | --snvphyl ] [ --window ] [ --step ] FILE''', formatter_class=argparse.RawDescriptionHelpFormatter, description='''''',epilog='''''')
+    self.parser=argparse.ArgumentParser(usage='''%(prog)s [-h, --help] [--nasp | --cfsan | --lyve | --snvphyl] [--window WINDOW] [--step STEP] DIR''', formatter_class=argparse.RawDescriptionHelpFormatter, description='''''',epilog='''''')
 
     # set input file type
     self.input = self.parser.add_mutually_exclusive_group(required=True)
@@ -61,6 +62,8 @@ class ArgParse:
     self.input.add_argument('--snvphyl', action='store_true', help='SNV Phylogenomics Pipeline')
 
     # set window size and step size
+    self.parser.add_argument('-p', default=False, action='store_true', help='set size of capture window to measure snp density')
+    self.parser.add_argument('-d', default=False, action='store_true', help='set size of capture window to measure snp density')
     self.parser.add_argument('--window', default=10000, type=int, help='set size of capture window to measure snp density')
     self.parser.add_argument('--step', default=5000, type=int, help='set step size to move window down snp matrix')
     self.parser.add_argument('DIR', nargs='*', help='SNP pipeline output directory')
@@ -127,8 +130,48 @@ def readFile(file):
 
   return file
 
+def bamThread(DIR, hash, snpPositions, sample):
+  if not os.path.exists("snpDensityOut/" + "".join(sample.split(" ")) + "-Depth.txt"):
+    #print("    creating file \"./snpDensityOut/" + "".join(sample.split(" ")) + "-Depth.txt\" (" + str(i) + " of " + str(len(samples) - 1) + ")")
+
+    # get depth from BAM file (faster than VCF)
+    if os.path.exists(DIR + "bwamem/" + sample + "-bwamem.bam"):
+      coverage = subprocess.Popen("module load samtools; samtools depth -b snpDensityOut/snpPositions.txt " + DIR + "bwamem/" + sample + "-bwamem.bam", universal_newlines=True, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+      coverage, coverageERR = coverage.communicate()
+
+    # if no BAM file, get depth from VCF file
+    elif os.path.exists(DIR + "gatk/" + sample + "-bwamem-gatk.vcf"):
+      coverage = subprocess.Popen("module load vcftools; vcftools --vcf " + DIR + "gatk/" + sample + "-bwamem-gatk.vcf --positions snpDensityOut/snpPositions.txt --site-depth --stdout | awk 'NR > 1 {print $1 \"\t\" $2 \"\t\" $3}'", universal_newlines=True, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+      coverage, coverageERR = coverage.communicate()
+
+    # if no BAM or VCF file, then write in coverage as 0
+    else:
+      coverage = list(snpPositions)
+      for j in range(0, len(coverage)):
+        coverage[j] += "\t0"
+      coverage = "\n".join(coverage)
+    f = open("snpDensityOut/" + "".join(sample.split(" ")) + "-Depth.txt", 'w')
+    f.write(coverage)
+    f.close()
+  else:
+    #print("    reading file \"./snpDensityOut/" + "".join(sample.split(" ")) + "-Depth.txt\" (" + str(i) + " of " + str(len(samples) - 1) + ")")
+    coverage = readFile("snpDensityOut/" + "".join(sample.split(" ")) + "-Depth.txt")
+  if coverage.split("\n")[-1] == "":
+    coverage = coverage.split("\n")[:-1]
+  else:
+    coverage = coverage.split("\n")
+
+  # assemble hash
+  for line in coverage:
+    line = line.split("\t")
+    hash[line[0]][int(line[1])][1].append(int(line[2]))
+
+
 #------------------------------------------------------------( naspCoverage )
-def naspHash(DIR):
+def naspHash(args):
+
+  DIR = args.DIR[0]
+ 
 
   # open "matrices/bestsnp.tsv"
   file = readFile(DIR + "matrices/bestsnp.tsv")
@@ -159,50 +202,35 @@ def naspHash(DIR):
       hash[line[0]][int(line[1])] = [[],[]]
 
   # write SNP data to hash table
+  print("    building hash table") 
   for i in range(1, len(file)):
-    line = file[i].split("\t")
-    contig = "::".join(line[0].split("::")[:-1])
-    position = int(line[0].split("::")[-1])
-    for j in range(1, len(samples)+1):
-      hash[contig][position][0].append(line[j])
+    line = file[i].split("\t")[:len(samples)+1]
+    ID = line[0].split("::")
+    contig = "::".join(ID[:-1])
+    position = int(ID[1])
+    hash[contig][position][0] = line[1:]
+    if args.d:
+      hash[contig][position][1] = (len(samples)-1) * [0,]
 
   # write SNP coverage to files
+  if args.d:
+    return [samples, hash]
+
   for i in range(1, len(samples)):
-    if not os.path.exists("snpDensityOut/" + "".join(samples[i].split(" ")) + "-Depth.txt"):
-      print("    creating file \"./snpDensityOut/" + "".join(samples[i].split(" ")) + "-Depth.txt\" (" + str(i) + " of " + str(len(samples) - 1) + ")")
+    print("    creating file \"./snpDensityOut/" + "".join(samples[i].split(" ")) + "-Depth.txt\" (" + str(i) + " of " + str(len(samples) - 1) + ")")
+    while threading.activeCount() > 10:
+      time.sleep(1)
+    t = threading.Thread(target=bamThread, args = [DIR, hash, snpPositions, samples[i]])
+    t.daemon = True
+    t.start()
 
-      # get depth from BAM file (faster than VCF)
-      if os.path.exists(DIR + "bwamem/" + samples[i] + "-bwamem.bam"):
-        coverage = subprocess.Popen("module load samtools; samtools depth -b snpDensityOut/snpPositions.txt " + DIR + "bwamem/" + samples[i] + "-bwamem.bam", universal_newlines=True, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        coverage, coverageERR = coverage.communicate()
+  while threading.activeCount() > 1:
+    time.sleep(1)
 
-      # if no BAM file, get depth from VCF file
-      elif os.path.exists(DIR + "gatk/" + samples[i] + "-bwamem-gatk.vcf"):
-        coverage = subprocess.Popen("module load vcftools; vcftools --vcf " + DIR + "gatk/" + samples[i] + "-bwamem-gatk.vcf --positions snpDensityOut/snpPositions.txt --site-depth --stdout | awk 'NR > 1 {print $1 \"\t\" $2 \"\t\" $3}'", universal_newlines=True, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        coverage, coverageERR = coverage.communicate()
 
-      # if no BAM or VCF file, then write in coverage as 0
-      else:
-        coverage = list(snpPositions)
-        for j in range(0, len(coverage)):
-          coverage[j] += "\t0"
-        coverage = "\n".join(coverage)
-      f = open("snpDensityOut/" + "".join(samples[i].split(" ")) + "-Depth.txt", 'w')
-      f.write(coverage)
-      f.close()
-    else:
-      coverage = readFile("snpDensityOut/" + "".join(samples[i].split(" ")) + "-Depth.txt")
-    if coverage.split("\n")[-1] == "":
-      coverage = coverage.split("\n")[:-1]
-    else:
-      coverage = coverage.split("\n")
-
-    # assemble hash
-    for line in coverage:
-      line = line.split("\t")
-      hash[line[0]][int(line[1])][1].append(int(line[2]))
 
   return [samples, hash]
+
 
 #------------------------------------------------------------( cfsanHash )
 def cfsanHash(DIR):
@@ -450,7 +478,7 @@ def lyveHash(DIR):
 def processHash(samples, hash, windowSize, stepSize):
 
   # process hash table
-  print("(2/3) processing hash table")
+  print("(3/4) processing hash table")
 
   contigs = sorted(list(hash.keys()))
 
@@ -536,12 +564,9 @@ def processHash(samples, hash, windowSize, stepSize):
           tempFasta = ""
           for sample in samples:
             tempFasta += fasta[sample][0]+'\n'+fasta[sample][1]+'\n'
-            #f = open("tempFasta.fasta", 'w')
-            #f.write(tempFasta)
-            #f.close()
-            #phi = subprocess.Popen("module load phipack/phipack; Phi -f tempFasta.fasta", universal_newlines=True, shell=True, stdout=subprocess.PIPE)
-            #phi = str(phi.stdout.read().split(":")[-1].strip())
           phi = phiStat.fasta(tempFasta)
+          if phi < 0.0000000001:
+            phi = 0.0000000001
 
       for sample in samples:
         fasta[sample][1] = blankSample
@@ -561,6 +586,24 @@ def processHash(samples, hash, windowSize, stepSize):
 
   print()
   return results
+
+#------------------------------------------------------------( printResults )
+def printSnps(results):
+  out = "exciseContig({"
+  contigOut = ""
+  for contig in results:
+    contigOut += "\"" + contig + "\":{"
+    dataOut = ""
+    for index in sorted(results[contig]):
+      dataOut += str(index) + ":\"" + "".join(results[contig][index][0]) + "\","
+    contigOut += dataOut[:-1] + "},"
+  out += contigOut[:-1] + "})"
+
+  f = open("snpDensityOut/excise.jsonp", 'w')
+  f.write(out)
+  f.close()
+
+  return
 
 #------------------------------------------------------------( printResults )
 def printResults(results):
@@ -603,13 +646,18 @@ def main():
   #     "{contig1: {position1: [['A', 'A', 'A', 'A', 'G'], ['42', '42', '42', '42']], position2: [['T', 'T', 'T', 'T', 'C'], ['42', '42', '42', '42']]},
   #       contig2: {position1: [['A', 'A', 'A', 'A', 'G'], ['42', '42', '42', '42']], position2: [['T', 'T', 'T', 'T', 'C'], ['42', '42', '42', '42']]}}"
 
-  print("(1/3) gathering coverage from BAM/VCF files")
+  print("(1/4) gathering coverage from BAM/VCF files")
   if args.nasp == True:
-    results = naspHash(args.DIR[0])
+    results = naspHash(args)
   elif args.cfsan == True:
     results = cfsanHash(args.DIR[0])
   elif args.lyve == True:
     results = lyveHash(args.DIR[0])
+
+  print("(2/4) writing export and excise data files")
+  printSnps(results[1])
+  quit()
+
   results = processHash(results[0], results[1], args.window, args.step)
 
   ### rolling window ###
@@ -622,7 +670,7 @@ def main():
   # }
 
   # print results to file
-  print("(3/3) writing results csv file")
+  print("(4/4) writing results csv file")
   print("    creating file \"./snpDensityOut/snpDensityMatrix.csv\"")
   printResults(results)
 

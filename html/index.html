@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+
+  <head>
+    <title>snpDensityMatix</title>
+
+    <meta charset="utf-8"></meta>
+
+    <!-- Dygraph.js -->
+    <script src="./js/dygraph.min.js"></script>
+    <script src="./js/synchronizer.js"></script>
+    <link href="./css/dygraph.min.css" rel="stylesheet">
+    <script src="./js/interaction-api.js"></script>
+
+    <!-- CSS -->
+    <link href="./css/bootstrap.min.css" rel="stylesheet">
+    <link href="./css/sidebar.css" rel="stylesheet">
+
+    <!-- Javascript -->
+    <script src="./js/jquery.min.js"></script>
+    <script src="./js/pages.js"></script>
+    <script src="./js/popper.min.js"></script>
+    <script src="./js/bootstrap.min.js"></script>
+  </head>
+
+  <body>
+    <!-- sidebar for samples menu -->
+    <div id="sidebar-wrapper" style="white-space:nowrap;">
+      <div style="padding:10px;">
+        <div style="position:absolute;right:10px;">
+          <button type="button" class="btn btn-info btn-sm" onclick="CHECKBOXselectAll()">Select All</button>
+          <button type="button" class="btn btn-info btn-sm" onclick="CHECKBOXselectNone()">Select None</button>
+        </div>
+        <font size='5'>Samples:</font>
+        <div id="SETTINGS-samples"></div>
+      </div>
+    </div>
+
+    <div id="main-wrapper" class="toggle" style="white-space:nowrap;">
+      <button type="button" id="menu-btn" class="btn btn-primary btn-sm toggle" onclick="toggleSamples()">☰</button>
+      <div class="button" id="dark-overlay" onclick="closeContig()"></div>
+      <!-- bottombar for single contig display -->
+      <div id="bottombar-wrapper" style="white-space:nowrap;">
+        <div id="CONTIG-single"></div>
+      </div>
+
+      <!-- page for graphs -->
+      <div id="graph-wrapper" onscroll="progressiveLoad()">
+        <img class="loading" src="images/loading.png">
+        <ul id="CONTIG-options" class="pagination pagination-sm justify-content-center"></ul>
+        <ul id="CONTIG-navigation" style="white-space: nowrap;" class="pagination pagination-sm justify-content-center"></ul>
+        <font size="4" color="#aaa"><div id="graphSort" style="position:absolute;right:20px;padding-top:7px;"></div></font>
+        <div id="graphs"></div><br>
+        <ul id="CONTIG-navigationBottom" style="white-space: nowrap;" class="pagination pagination-sm justify-content-center"></ul>
+      </div>
+    </div>
+  </body>
+
+</html>

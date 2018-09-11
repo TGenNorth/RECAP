@@ -9,77 +9,175 @@ TODO:
 // after sorting or changing graph type for contigs, current page defaults to 0
 var maxContig = 20;
 var currentPage = 0;
+var loadContig = Math.min(10,maxContig-1);
+var unloadContig = Math.max(loadContig-10,0);
 var sideWidth = 0;
+var topHeight = 0;
+var currentContig = null;
 
 // variables to store imported JSON data
 var samples;
 var contigs;
-var dygraphs = {};
+var dygraphs = [];
+var gs = [];
+var sync;
 
 // for current graph type on display
-var display = "snps";
-var out = [];
+var display = "SNPs";
+var sort = "length";
+
+$(window).resize(function () {
+  resizeContig();
+  loadHandler();
+});
+
+function closeContig() {
+  currentContig = null;
+  gs = [];
+  $("#bottombar-wrapper").addClass("toggle");
+  $("#dark-overlay").addClass("toggle");
+  
+  resizeContig();
+}
+
+function resizeContig() {
+  topHeight = $("#graph-wrapper").height() + 30;
+  $("#bottombar-wrapper").css("height", "auto");
+  if ($("#bottombar-wrapper").height() > $("#main-wrapper").height()) {
+    $("#bottombar-wrapper").css("height", $("#main-wrapper").height());
+  }
+  $("#bottombar-wrapper").css("bottom", 0);
+  $("#bottombar-wrapper.toggle").css("bottom", -topHeight);
+  $("#bottombar-wrapper").css("z-index", 200);
+  $("#bottombar-wrapper.toggle").css("z-index", 99);
+  $("#dark-overlay").css("opacity", 0.5);
+  $("#dark-overlay.toggle").css("opacity", 0.0);
+  $("#dark-overlay").css("z-index", 199);
+  $("#dark-overlay.toggle").css("z-index", 99);
+}
 
 // pulls graph page aside to reveal samples menu
-function toggleMenu() {
-  $("#sidebar-wrapper").css('width',sideWidth);
-  $("#graph-wrapper").toggleClass("toggle");
-  $("#graph-wrapper").css("left", sideWidth);
-  $("#graph-wrapper.toggle").css("left", 0);
-  $("#menu-btn").toggleClass("toggle");
-  $("#menu-btn").css("left", sideWidth+10);
-  $("#menu-btn.toggle").css("left", 10);
-  setTimeout(function(){ window.dispatchEvent(new Event('resize')); }, 250);
+function openContig(i) {
+  currentContig = i;
+  document.getElementById("CONTIG-single").innerHTML = [
+     "<div class='graph'>",
+     "  <div class='col-12'>",
+     "    <font size='6'>Contig "+parseInt(i+1)+": </font><font size='5'>"+contigs[i].name+"</font>",
+     "    <div style='top:10px;right:10px;position:absolute;'>",
+     "      <button type='button' id='exp-btn' class='btn btn-info btn-sm' onclick='exportData()'>Export</button>",
+     "      <button type='button' id='exp-btn' class='btn btn-info btn-sm' onclick='exciseData()'>Excise</button>",
+     "      <button type='button' id='close-btn' class='btn btn-danger btn-sm' onclick='closeContig()'>✕</button>",
+     "    </div>",
+     "  </div>",
+     "  <div class='col-12'>",
+     "  <div style='right:20px;position:absolute;'><font size='5'>SNPs</font></div>",
+     "    <div id='snplegend"+i+"' style='width:100%; font-size: small;'></div>",
+     "    <div id='snpgraph"+i+"' style='width:100%; height:200px;'></div>",
+     "  </div>",
+     "</div>",
+     "<div class='graph'>",
+     "  <div class='col-12'>",
+     "  <div style='right:20px;position:absolute;padding-top:10px;'><font size='5'>Depth</font></div>",
+     "    <div id='depthlegend"+i+"' style='padding-top:10px;width:100%; font-size: small;'></div>",
+     "    <div id='depthgraph"+i+"' style='width:100%; height:200px;'></div>",
+     "  </div>",
+     "</div>",
+     "<div class='graph'>",
+     "  <div class='col-12'>",
+     "  <div style='right:20px;position:absolute;padding-top:10px;'><font size='5'>Phi Statistic</font></div>",
+     "    <div id='philegend"+i+"' style='padding-top:10px;width:100%; font-size: small;'></div>",
+     "    <div id='phigraph"+i+"' style='width:100%; height:200px;'></div>",
+     "  </div>",
+     "</div>"].join('\n');
+  if (gs.length == 0) {
+    gs.push(fillGraphs("snp", i, "SNPs"));
+    gs.push(fillGraphs("depth", i, "depth"));
+    gs.push(fillGraphs("phi", i, "phi"));
+  }
+  $("#bottombar-wrapper").removeClass("toggle");
+  $("#dark-overlay").removeClass("toggle");
+  resizeContig();
+  sync = Dygraph.synchronize(gs, {range: false, selection: false})
+}
+
+// pulls graph page aside to reveal samples menu
+function toggleSamples() {
+  $("#sidebar-wrapper").css("width",sideWidth);
+  $("#main-wrapper").toggleClass("toggle");
+  $("#main-wrapper").css("left", sideWidth);
+  $("#main-wrapper.toggle").css("left", 0);
+  setTimeout(function(){ window.dispatchEvent(new Event('resize')); }, 300);
 }
 
 // ================================================== ( Update Graphs )
 // update all graph data based on checkboxes clicked
-function updateOut() {
-  checkedSamples = CHECKBOXreturnChecked();
-  var max;
+
+// get the highest graph value on current page
+function getMax() {
   if ((currentPage*maxContig)+maxContig > contigs.length) {
     max = contigs.length;
   } else {
     max = (currentPage*maxContig)+maxContig;
   }
-  for (var i = currentPage*maxContig; i < max; i++) {
-    // get data for each graph object
-    out[i] = ("position");
-    if (display === "phi") {
-      out[i] += ",phi"
-    } else {
-      for (var k = 0; k < checkedSamples.length; k++) { 
-      //for (index in checkedSamples) {
-        out[i] += ","+samples[checkedSamples[k]]
-      }
-    }
-    out[i] += "\n"
-    for (var j = 0; j < contigs[i].data.length; j++) {
-      var line = "";
-      line += contigs[i].data[j].position[0];
-      if (display === "snps") {
-        for (var k = 0; k < checkedSamples.length; k++) { 
-        //for (index in checkedSamples) {
-          line += ","+contigs[i].data[j].SNPs[checkedSamples[k]]
-        }
-      } else if (display === "depth") {
-        for (var k = 0; k < checkedSamples.length; k++) { 
-        //for (index in checkedSamples) {
-          line += ","+contigs[i].data[j].depth[checkedSamples[k]]
-        }
-      } else if (display === "phi") {
-        line += ","+Number.parseFloat(contigs[i].data[j].phi)
-      }
-      out[i] += line + "\n"
-      if (contigs[i].data.length === 1) {
-        out[i] += contigs[i].data[j].position[1]+line.substr(1, line.length) + "\n"
-      }
-    }
+  return max
+}
+
+// update data in all loaded graphs
+// data will be recalculated before calling this function
+function updateOut() {
+  for (var i = currentPage*maxContig; i < getMax(); i++) {
+    if (dygraphs[i]) {
     dygraphs[i].updateOptions(
       {
-        'file':out[i]
+        'file':getOut(i, display)
       }
     );
+  }}
+  if (currentContig != null) {
+    gs[2].updateOptions(
+      {
+        'file':getOut(currentContig, "phi")
+      }
+    );
+    gs[1].updateOptions(
+      {
+        'file':getOut(currentContig, "depth")
+      }
+    );
+    gs[0].updateOptions(
+      {
+        'file':getOut(currentContig, "SNPs")
+      }
+    );
+  }
+}
+
+// load and unload data based on scroll distance from the top
+// dramatically increases speed when many contigs are present
+function progressiveLoad() {
+  while ((currentPage*maxContig)+loadContig < getMax()-1 && document.getElementById("graph-wrapper").clientHeight > $("#graph"+parseInt((currentPage*maxContig)+loadContig)).offset().top-$("#graph"+parseInt((currentPage*maxContig)+loadContig)).height()*2 && document.getElementById("graph-wrapper").clientHeight >= $("#graph"+parseInt((currentPage*maxContig)+loadContig)).offset().top-$("#graph"+(currentPage*maxContig)+parseInt(loadContig)).height()*3) {
+    loadContig = Math.min(loadContig+1, maxContig)
+    unloadContig = Math.max(unloadContig, loadContig-10)
+  }
+  while ((currentPage*maxContig)+unloadContig > (currentPage*maxContig) && document.getElementById("graph-wrapper").clientHeight < $("#graph"+parseInt((currentPage*maxContig)+loadContig)).offset().top-$("#graph"+(currentPage*maxContig)+parseInt(loadContig)).height()*3 && document.getElementById("graph-wrapper").clientHeight <= $("#graph"+parseInt((currentPage*maxContig)+loadContig)).offset().top-$("#graph"+parseInt((currentPage*maxContig)+loadContig)).height()*2) {
+    unloadContig = Math.max(unloadContig-1, 0)
+    loadContig = Math.min(loadContig, unloadContig+10)
+  }
+  loadHandler()
+}
+
+// load all graphs between "unloadContig" and "loadContig" variables
+// unload all else if graph is loaded
+function loadHandler() {
+  for (var i = (currentPage*maxContig); i < getMax(); i++) {
+    if (i >= (currentPage*maxContig)+unloadContig && i <= (currentPage*maxContig)+loadContig) {
+      $("#graph"+i).css("width",parseInt($("#graph-wrapper").width()-30))
+      dygraphs[i] = fillGraphs("",i, display);
+    }
+    else if (dygraphs[i]) {
+      document.getElementById("graph"+i).innerHTML = "";
+      dygraphs[i] = null
+    }
   }
 }
 
@@ -95,55 +193,80 @@ function download(filename, text) {
   document.body.removeChild(element);
 }
 
-// push data in graph range to download element
-function exportContig(i){
-  range = dygraphs[i].xAxisRange()
-  left = Math.floor(range[0])
-  right = Math.ceil(range[1])
-  download("range.txt", contigs[i].name+"\t"+String(left)+"\t"+String(right))
+function exportData() {
+  var file = document.createElement("script");
+  file.src = "export.jsonp?callback=exportContig";
+  document.body.insertBefore(file, document.body.firstChild);
 }
 
-// ================================================== ( Draw Contigs ) 
-// create and build all graph objects
-function drawContigs() {
-  // only add data for samples that are checked off
-  checkedSamples = CHECKBOXreturnChecked();
-  
-  var max;
-  if ((currentPage*maxContig)+maxContig > contigs.length) {
-    max = contigs.length;
-  } else {
-    max = (currentPage*maxContig)+maxContig;
+function exciseData() {
+  var file = document.createElement("script");
+  file.src = "excise.jsonp?callback=exciseContig";
+  document.body.insertBefore(file, document.body.firstChild);
+}
+
+function exportContig(data) {
+  if (currentContig != null) {
+    range = dygraphs[currentContig].xAxisRange()
+    left = Math.floor(range[0])
+    right = Math.ceil(range[1])
+    for (var i = 0; i < data[contigs[currentContig].name].length; i++) {
+      console.log(data[contigs[currentContig].name][i])
+    }
+    //download(contigs[currentContig].name+"_range.txt", contigs[currentContig].name+"\t"+String(left)+"\t"+String(right))
   }
-  // empty and repopulate all graph objects
-  document.getElementById("graphs").innerHTML = ''
-  for (var i = currentPage*maxContig; i < max; i++) {
-    document.getElementById("graphs").innerHTML +=[
-     "<div class='graph'>",
-     "  <div class='col-12'>",
-     "    <button type='button' class='btn btn-outline-secondary btn-sm' style='top:5px;right:15px;position:absolute;' onclick='exportContig("+i+")'>Export</button>",
-     "    <font size='5'>Contig "+parseInt(i+1)+":</font><font size='4'> <span id='link' onclick='console.log("+i+")'>"+contigs[i].name+"</span></font>",
-     "  </div>",
-     "  <div class='col-12'>",
-     "    <div id='legend"+i+"' style='margin:auto;width:100%; font-size: small;'></div>",
-     "    <div id='graph"+i+"' style='margin:auto;width:100%; height:200px;'></div>",
-     "  </div>",
-     "</div>"].join('\n');
-    // get data for each graph object
-    out[i] = ("position");
+}
+
+function exciseContig(data) {
+  if (currentContig != null) {
+    var checkedSamples = CHECKBOXreturnChecked();
+    range = gs[currentContig].xAxisRange()
+    left = Math.floor(range[0])
+    right = Math.ceil(range[1])
+    var out = [">reference"]
+    for (var i = 0; i < checkedSamples.length; i++) {
+      out.push(">" + samples[checkedSamples[i]])
+    }
+    var keys = Object.keys(data[contigs[currentContig].name])
+    var width = 0;
+    for (var i = 0; i < keys.length; i++) {
+      if (keys[i] > left && keys[i] < right) {
+        if (!(width%80)) {
+          out[0] += "\n"
+        }
+        out[0] += data[contigs[currentContig].name][keys[i]][0]
+        for (var j = 0; j < checkedSamples.length; j++) {
+          if (!(width%80)) {
+            out[j+1] += "\n"
+          }
+          out[j+1] += data[contigs[currentContig].name][keys[i]][checkedSamples[j]]
+        }
+        width += 1;
+      }
+    }
+    download(contigs[currentContig].name+"_excise.txt", out.join('\n\n'))
+  }
+}
+
+// ================================================== ( Draw Contigs )
+
+function getOut(i, display) {
+  var out;
+  var checkedSamples = CHECKBOXreturnChecked();
+    out = ("position");
     if (display === "phi") {
-      out[i] += ",phi"
+      out += ",phi"
     } else {
       for (var k = 0; k < checkedSamples.length; k++) { 
       //for (index in checkedSamples) {
-        out[i] += ","+samples[checkedSamples[k]]
+        out += ","+samples[checkedSamples[k]]
       }
     }
-    out[i] += "\n"
+    out += "\n"
     for (var j = 0; j < contigs[i].data.length; j++) {
       var line = "";
       line += contigs[i].data[j].position[0];
-      if (display === "snps") {
+      if (display === "SNPs") {
         for (var k = 0; k < checkedSamples.length; k++) { 
         //for (index in checkedSamples) {
           line += ","+contigs[i].data[j].SNPs[checkedSamples[k]]
@@ -156,16 +279,54 @@ function drawContigs() {
       } else if (display === "phi") {
         line += ","+Number.parseFloat(contigs[i].data[j].phi)
       }
-      out[i] += line + "\n"
+      out += line + "\n"
       if (contigs[i].data.length === 1) {
-        out[i] += contigs[i].data[j].position[1]+line.substr(1, line.length) + "\n"
+        out += contigs[i].data[j].position[1]+line.substr(1, line.length) + "\n"
       }
     }
-  }
+
+  return out;
+}
+
+// create and build all graph objects
+function drawGraphs() {
+  // only add data for samples that are checked off
+  var checkedSamples = CHECKBOXreturnChecked();
   
+  // empty and repopulate all graph objects
+  document.getElementById("graphs").innerHTML = ''
+
+  for (var i = currentPage*maxContig; i < getMax(); i++) {
+    document.getElementById("graphs").innerHTML +=[
+     "<div class='graph'>",
+     "  <div class='col-12'>",
+     "    <font size='5'>Contig "+parseInt(i+1)+":</font><font size='4'> <span id='link' onclick='openContig("+i+")'>"+contigs[i].name+"</span></font>",
+     "  </div>",
+     "  <div class='col-12'>",
+     "    <div id='legend"+i+"' style='margin:auto;width:"+parseInt($("#graph-wrapper").width()-30)+"px; font-size: small;'></div>",
+     "    <div id='graph"+i+"' style='margin:auto;width:"+parseInt($("#graph-wrapper").width()-30)+"px; height:200px;'></div>",
+     "  </div>",
+     "</div>"].join('\n');
+  }
+
+  buildQuantity();
+  buildDisplay();
+  buildSort();
+  buildNavigation();
+  buildBottom();
+
+  loadContig = Math.min(10,getMax()-currentPage*maxContig-1);
+  unloadContig = Math.max(loadContig-10,0);
+  progressiveLoad();
+
+  document.getElementById("graphSort").innerHTML = "Showing " + maxContig + " contigs: " + display + ", sorted by " + sort;
+  $('.loading').css('display', 'none');
+}
+
+function fillGraphs(type, i, display) {
   // fill each graph with saved data
   var yLabel;
-  if (display === "snps") {
+  if (display === "SNPs") {
     yLabel = "Number of SNPs"
   } else if (display === "depth") {
     yLabel = "Depth of SNPs"
@@ -176,9 +337,9 @@ function drawContigs() {
   // resets to [0,1] range for phi, and [null,null] for other
   function getLowestPhi(g) {
     var lowestPhi = 0.009;
-    for (var i = 0; i < g.numRows(); i++) {
-      if (lowestPhi > g.getValue(i,1)) {
-        lowestPhi = g.getValue(i,1);
+    for (var j = 0; j < g.numRows(); j++) {
+      if (lowestPhi > g.getValue(j,1)) {
+        lowestPhi = g.getValue(j,1);
       }
     }
     return lowestPhi;
@@ -257,11 +418,10 @@ function drawContigs() {
     return legend
   }
 
-  // create each graph object
-  for (var i = currentPage*maxContig; i < max; i++) {
+
     var g = new Dygraph(
-      document.getElementById("graph"+i),
-      out[i],
+      document.getElementById(type+"graph"+i),
+      getOut(i, display),
       {
         plugins: [
           zoomReset
@@ -280,7 +440,7 @@ function drawContigs() {
         ylabel: yLabel,
         labelsShowZeroValues: true,
         labelsSeparateLines: true,
-        labelsDiv: 'legend'+i,
+        labelsDiv: type+'legend'+i,
         legend: 'always',
         legendFormatter: legendFormatter,
         valueRange: [null, null],
@@ -340,37 +500,31 @@ function drawContigs() {
           var minX = g.getValue(0,0);
           var maxX = g.getValue(g.numRows()-1,0);
           // check slope crossing 0.05 threshold and find X given Y=0.05
-          for (var i = 0; i < g.numRows()-1; i++) {
-            if (g.getValue(i,1) >= 0.05 && g.getValue(i+1,1) < 0.05) {
-              var start = g.getValue(i,0);
+          for (var j = 0; j < g.numRows()-1; j++) {
+            if (g.getValue(j,1) >= 0.05 && g.getValue(j+1,1) < 0.05) {
+              var start = g.getValue(j,0);
               //console.log("slopeU:",Math.log10(g.getValue(i+1,1))-Math.log10(g.getValue(i,1)))
               //console.log("y    U:",g.getValue(i+1,1)*Math.pow((10),Math.log10(g.getValue(i,1))-Math.log10(g.getValue(i+1,1))))
               //console.log("phi  U:",g.getValue(i,1))
               //console.log("X1   U:",(Math.log10(0.05/g.getValue(i+1,1)))/(Math.log10(g.getValue(i+1,1))-Math.log10(g.getValue(i,1))))
               //console.log("X2   U:",(Math.log10(g.getValue(i+1,1)/g.getValue(i+1,1)))/(Math.log10(g.getValue(i+1,1))-Math.log10(g.getValue(i,1))))
-              highlight(g.getValue(i+1,0)+((Math.log10(0.05/g.getValue(i+1,1)))/(Math.log10(g.getValue(i+1,1))-Math.log10(g.getValue(i,1)))*(g.getValue(i+1,0)-g.getValue(i,0))),g.getValue(i+1,0))
-            } else if (g.getValue(i,1) < 0.05 && g.getValue(i+1,1) >= 0.05) {
-              var start = g.getValue(i,0);
+              highlight(g.getValue(j+1,0)+((Math.log10(0.05/g.getValue(j+1,1)))/(Math.log10(g.getValue(j+1,1))-Math.log10(g.getValue(j,1)))*(g.getValue(j+1,0)-g.getValue(j,0))),g.getValue(j+1,0))
+            } else if (g.getValue(j,1) < 0.05 && g.getValue(j+1,1) >= 0.05) {
+              var start = g.getValue(j,0);
               //console.log("slopeD:",Math.log10(g.getValue(i,1))-Math.log10(g.getValue(i+1,1)))
               //console.log("y    D:",g.getValue(i,1)*Math.pow((10),Math.log10(g.getValue(i+1,1))-Math.log10(g.getValue(i,1))))
               //console.log("phi  D:",g.getValue(i+1,1))
-              highlight(g.getValue(i+1,0)+((Math.log10(0.05/g.getValue(i+1,1)))/(Math.log10(g.getValue(i,1))-Math.log10(g.getValue(i+1,1)))*(g.getValue(i,0)-g.getValue(i+1,0))),g.getValue(i,0))
-            } else if (g.getValue(i,1) < 0.05 && g.getValue(i+1,1) < 0.05) {
-              highlight(g.getValue(i,0),g.getValue(i+1,0))
+              highlight(g.getValue(j+1,0)+((Math.log10(0.05/g.getValue(j+1,1)))/(Math.log10(g.getValue(j,1))-Math.log10(g.getValue(j+1,1)))*(g.getValue(j,0)-g.getValue(j+1,0))),g.getValue(j,0))
+            } else if (g.getValue(j,1) < 0.05 && g.getValue(j+1,1) < 0.05) {
+              highlight(g.getValue(j,0),g.getValue(j+1,0))
             }
           }
         }
       });
     }
-    dygraphs[i] = g
-  }
+    return g;
   // build all interactive buttons
   
-  buildQuantity();
-  buildDisplay();
-  buildSort();
-  buildNavigation();
-  buildBottom();
 }
 
 // ================================================== ( Build Buttons ) 
@@ -378,7 +532,7 @@ function drawContigs() {
 function buildQuantity() {
   var buttonData = [
    "<div class='dropdown' style='margin-left:10px;margin-right:10px;'>",
-   "  <button class='btn btn-secondary btn-sm dropdown-toggle' type='button' id='dropdownMenuButton' data-toggle='dropdown' aria-haspopup='true' aria-expanded='false'>Contigs Per Page</button>",
+   "  <button class='btn btn-info btn-sm dropdown-toggle' type='button' id='dropdownMenuButton' data-toggle='dropdown' aria-haspopup='true' aria-expanded='false'>Contigs Per Page</button>",
    "  <div class='dropdown-menu' aria-labelledby='dropdownMenuButton'>"]
   if (contigs.length > 5) {
     buttonData.push("<span class='dropdown-item' onclick='CONTIGquantity(5)'>5</span>");
@@ -410,9 +564,9 @@ function buildQuantity() {
 function buildDisplay() {
   document.getElementById("CONTIG-options").innerHTML += [
    "<div class='dropdown' style='margin-left:10px;margin-right:10px;'>",
-   "  <button class='btn btn-secondary btn-sm dropdown-toggle' type='button' id='dropdownMenuButton' data-toggle='dropdown' aria-haspopup='true' aria-expanded='false'>Graph Type</button>",
+   "  <button class='btn btn-info btn-sm dropdown-toggle' type='button' id='dropdownMenuButton' data-toggle='dropdown' aria-haspopup='true' aria-expanded='false'>Graph Type</button>",
    "  <div class='dropdown-menu' aria-labelledby='dropdownMenuButton'>",
-   "    <span class='dropdown-item' onclick='CONTIGdisplay(\"snps\")'>SNPs</span>",
+   "    <span class='dropdown-item' onclick='CONTIGdisplay(\"SNPs\")'>SNPs</span>",
    "    <span class='dropdown-item' onclick='CONTIGdisplay(\"depth\")'>Depth</span>",
    "    <span class='dropdown-item' onclick='CONTIGdisplay(\"phi\")'>PHI</span>",
    "  </div>",
@@ -423,11 +577,11 @@ function buildDisplay() {
 function buildSort() {
   document.getElementById("CONTIG-options").innerHTML += [
    "<div class='dropdown' style='margin-left:10px;margin-right:10px;'>",
-   "  <button class='btn btn-secondary btn-sm dropdown-toggle' type='button' id='dropdownMenuButton' data-toggle='dropdown' aria-haspopup='true' aria-expanded='false'>Sort</button>",
+   "  <button class='btn btn-info btn-sm dropdown-toggle' type='button' id='dropdownMenuButton' data-toggle='dropdown' aria-haspopup='true' aria-expanded='false'>Sort</button>",
    "  <div class='dropdown-menu' aria-labelledby='dropdownMenuButton'>",
    "    <span class='dropdown-item' onclick='CONTIGsort(\"name\")'>Name</span>",
    "    <span class='dropdown-item' onclick='CONTIGsort(\"length\")'>Length</span>",
-   "    <span class='dropdown-item' onclick='CONTIGsort(\"aggregate\")'>SNPs</span>",
+   "    <span class='dropdown-item' onclick='CONTIGsort(\"SNPs\")'>SNPs</span>",
    "    <span class='dropdown-item' onclick='CONTIGsort(\"depth\")'>Depth</span>",
    "    <span class='dropdown-item' onclick='CONTIGsort(\"phi\")'>PHI</span>",
    "  </div>",
@@ -479,9 +633,15 @@ function buildBottom() {
 // ================================================== ( Button Functions )
 // change page and redraw contig graphs
 // used to selectively draw only a select few contigs
+
+function updateStatus() {
+  $('.loading').css('display', 'inline-block');
+  setTimeout(function wait() {
+    drawGraphs();
+  }, 100)
+}
+
 function CONTIGnavigation(page) {
-  // show loading icon
-  $('.loading').css('display', 'block');
   // prev, next, and manual selection for contig navigation
   if (page === "-") {
     currentPage = parseInt(currentPage - 1);
@@ -498,11 +658,7 @@ function CONTIGnavigation(page) {
   } else {
     currentPage = parseInt(page);
   }
-  // remove loading icon
-  var timer = setTimeout(function() {
-    drawContigs();
-    $('.loading').css('display', 'none');
-  }, 0);
+  updateStatus()
 }
 
 // set graph type and reset pages
@@ -525,6 +681,7 @@ function CONTIGquantity(option) {
 // sort contig data and reset pages
 function CONTIGsort(option) {
   // sort contigs by name (default option)
+  sort = option;
   if (option === "name") {
     contigs.sort(function(a,b){
       if(a.name < b.name)
@@ -542,7 +699,7 @@ function CONTIGsort(option) {
       return 0;
     });
   // sort contigs by aggregate (SNP density)
-  } else if (option === "aggregate") {
+  } else if (option === "SNPs") {
     contigs.sort(function(a,b){
       var aTotal = 0;
       var bTotal = 0;
@@ -629,7 +786,7 @@ function CHECKBOXselectNone() {
 // return list of only selected samples
 // used for drawing contigs with only relevant samples
 function CHECKBOXreturnChecked() {
-  checkedSamples = [];
+  var checkedSamples = [];
   for (var i = 0; i < samples.length; i++) {
     if (document.getElementById("CHECKBOX-samples"+samples[i]).checked === true) {
       checkedSamples.push(i);
@@ -661,12 +818,14 @@ function buildGraphs(data) {
   for (var i = 0; i < data.samples.length; i++) {
     document.getElementById("SETTINGS-samples").innerHTML += '<input type="checkbox" id="CHECKBOX-samples'+data.samples[i]+'" onclick="updateOut()" checked> '+data.samples[i]+': <div style="display:inline-block;" id="legend-'+data.samples[i]+'">0</div><br>';
   }
+  updateStatus();
   sideWidth = $("#sidebar-wrapper").width() + 30;
-  drawContigs()
+  topHeight = $("#graph-wrapper").height() + 30;
 }
 
 // main function runs on page load
 jQuery(document).ready(function($) {
+  closeContig();
   readData();
 });
 
