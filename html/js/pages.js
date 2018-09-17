@@ -64,8 +64,8 @@ function openContig(i) {
      "  <div class='col-12'>",
      "    <font size='6'>Contig "+parseInt(i+1)+": </font><font size='5'>"+contigs[i].name+"</font>",
      "    <div style='top:10px;right:10px;position:absolute;'>",
-     "      <button type='button' id='exp-btn' class='btn btn-info btn-sm' onclick='exportData()'>Export</button>",
      "      <button type='button' id='exp-btn' class='btn btn-info btn-sm' onclick='exciseData()'>Excise</button>",
+     "      <button type='button' id='exp-btn' class='btn btn-info btn-sm' onclick='exportData()'>Export</button>",
      "      <button type='button' id='close-btn' class='btn btn-danger btn-sm' onclick='closeContig()'>✕</button>",
      "    </div>",
      "  </div>",
@@ -171,6 +171,7 @@ function progressiveLoad() {
 function loadHandler() {
   for (var i = (currentPage*maxContig); i < getMax(); i++) {
     if (i >= (currentPage*maxContig)+unloadContig && i <= (currentPage*maxContig)+loadContig) {
+      $("#legend"+i).css("width",parseInt($("#graph-wrapper").width()-30))
       $("#graph"+i).css("width",parseInt($("#graph-wrapper").width()-30))
       dygraphs[i] = fillGraphs("",i, display);
     }
@@ -185,18 +186,17 @@ function loadHandler() {
 // create download element
 function download(filename, text) {
   var element = document.createElement('a');
-  element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(text));
-  element.setAttribute('download', filename);
-  element.style.display = 'none';
   document.body.appendChild(element);
-  element.click();
-  document.body.removeChild(element);
-}
+  element.style.display = 'none';
 
-function exportData() {
-  var file = document.createElement("script");
-  file.src = "export.jsonp?callback=exportContig";
-  document.body.insertBefore(file, document.body.firstChild);
+  var blob = new Blob([text], {encoding:"UTF-8",type:"text/plain;charset=UTF-8"}),
+      url = window.URL.createObjectURL(blob);
+  element.href = url;
+  element.download = filename;
+  element.click();
+  window.URL.revokeObjectURL(url);
+
+  document.body.removeChild(element);
 }
 
 function exciseData() {
@@ -205,46 +205,56 @@ function exciseData() {
   document.body.insertBefore(file, document.body.firstChild);
 }
 
+function exportData() {
+  var file = document.createElement("script");
+  file.src = "export.jsonp?callback=exportContig";
+  document.body.insertBefore(file, document.body.firstChild);
+}
+
 function exportContig(data) {
   if (currentContig != null) {
-    range = dygraphs[currentContig].xAxisRange()
-    left = Math.floor(range[0])
-    right = Math.ceil(range[1])
-    for (var i = 0; i < data[contigs[currentContig].name].length; i++) {
-      console.log(data[contigs[currentContig].name][i])
+    var checkedSamples = CHECKBOXreturnChecked();
+    for (var i = 0; i < checkedSamples.length; i++) {
+      checkedSamples[i] = checkedSamples[i] + 1;
     }
-    //download(contigs[currentContig].name+"_range.txt", contigs[currentContig].name+"\t"+String(left)+"\t"+String(right))
+    checkedSamples.unshift(0)
+    range = gs[2].xAxisRange();
+    left = Math.max(Math.floor(range[0]),0);
+    right = Math.min(Math.ceil(range[1]),contigs[currentContig].data.slice(-1)[0].position[1]);
+    var out = [];
+    var keys = Object.keys(data[contigs[currentContig].name]);
+    for (var i = 0; i < checkedSamples.length; i++) {
+      out.push(">" + keys[checkedSamples[i]] + "\n");
+      var tempLst = []
+      var tempStr = data[contigs[currentContig].name][keys[i]].substring(left,right)
+      for (var j = 0; j < right-left; j += 80) {
+        tempLst.push(tempStr.substring(j,j+80))
+      }
+      out[i] += tempLst.join("\n")
+    }
+    download("(export)_"+contigs[currentContig].name+"_("+left+"-"+right+")"+".txt", out.join("\n\n"));
   }
 }
 
 function exciseContig(data) {
   if (currentContig != null) {
-    var checkedSamples = CHECKBOXreturnChecked();
-    range = gs[currentContig].xAxisRange()
-    left = Math.floor(range[0])
-    right = Math.ceil(range[1])
-    var out = [">reference"]
-    for (var i = 0; i < checkedSamples.length; i++) {
-      out.push(">" + samples[checkedSamples[i]])
-    }
-    var keys = Object.keys(data[contigs[currentContig].name])
-    var width = 0;
-    for (var i = 0; i < keys.length; i++) {
-      if (keys[i] > left && keys[i] < right) {
-        if (!(width%80)) {
-          out[0] += "\n"
+    range = gs[2].xAxisRange();
+    left = Math.max(Math.floor(range[0]),0);
+    right = Math.min(Math.ceil(range[1]),contigs[currentContig].data.slice(-1)[0].position[1]);
+
+    var keys = Object.keys(data);
+    out = [data[keys[0]]]
+    for (var i = 1; i < keys.length; i++) {
+      var positions = Object.keys(data[contigs[i-1].name])
+      for (var j = 0; j < positions.length; j++) {
+        if (currentContig != i-1) {
+          out.push(data[keys[i]][positions[j]])
+        } else if (positions[j] < left || positions[j] > right) {
+          out.push(data[keys[i]][positions[j]])
         }
-        out[0] += data[contigs[currentContig].name][keys[i]][0]
-        for (var j = 0; j < checkedSamples.length; j++) {
-          if (!(width%80)) {
-            out[j+1] += "\n"
-          }
-          out[j+1] += data[contigs[currentContig].name][keys[i]][checkedSamples[j]]
-        }
-        width += 1;
       }
     }
-    download(contigs[currentContig].name+"_excise.txt", out.join('\n\n'))
+    download("(excise)_"+contigs[currentContig].name+"_(0-"+left+")("+right+"-"+contigs[currentContig].data.slice(-1)[0].position[1]+")"+".txt", out.join('\n'));
   }
 }
 
@@ -805,6 +815,9 @@ function readData() {
 
 // import sample and contig data from JSON
 function buildGraphs(data) {
+  if (maxContig > data.contigs.length) {
+    maxContig = data.contigs.length
+  }
   samples = data.samples;
   // pre-sort the contigs by length, this is the best default order
   data.contigs.sort(function(a,b){
