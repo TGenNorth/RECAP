@@ -182,25 +182,21 @@ def naspHash(args):
     samples[i] = samples[i].split("::")[0]
 
   # write samples and positions to file
-  if not os.path.exists("snpDensityOut/snpPositions.txt"):
-    print("    creating file \"./snpDensityOut/snpPositions.txt\"") 
-    f = open("snpDensityOut/snpPositions.txt", 'w')
-    snpPositions = subprocess.Popen("awk \'NR > 1 {print $1}\' " + DIR + "matrices/bestsnp.tsv", universal_newlines=True, shell=True, stdout=subprocess.PIPE)
-    snpPositions = snpPositions.stdout.read().split("\n")[:-1]
-    for i in range(0, len(snpPositions)):
-      snpPositions[i] = "::".join(snpPositions[i].split("::")[:-1]) + '\t' + snpPositions[i].split("::")[-1]
-    f.write("\n".join(snpPositions))
-    f.close()
-  else:
-    print("    reading file \"./snpDensityOut/snpPositions.txt\"") 
-    snpPositions = readFile("snpDensityOut/snpPositions.txt").strip().split("\n")
+  print("    creating file \"./snpDensityOut/snpPositions.txt\"") 
+  f = open("snpDensityOut/snpPositions.txt", 'w')
+  snpPositions = subprocess.Popen("awk \'NR > 1 {print $1}\' " + DIR + "matrices/bestsnp.tsv", universal_newlines=True, shell=True, stdout=subprocess.PIPE)
+  snpPositions = snpPositions.stdout.read().split("\n")[:-1]
+  for i in range(0, len(snpPositions)):
+    snpPositions[i] = "::".join(snpPositions[i].split("::")[:-1]) + '\t' + snpPositions[i].split("::")[-1]
+  f.write("\n".join(snpPositions))
+  f.close()
 
   # build position hash table for each contig
   hash = {}
   for line in snpPositions:
     line = line.split("\t")
-    if line[0] not in hash:
-      hash[line[0]] = {}
+    if str(line[0]) not in hash:
+      hash[str(line[0])] = {}
     if int(line[1]) not in hash[line[0]]:
       hash[line[0]][int(line[1])] = [[],[]]
 
@@ -232,7 +228,8 @@ def naspHash(args):
     line = file[i].split("\t")[:len(samples)+1]
     ID = line[0].split("::")
     contig = "::".join(ID[:-1])
-    position = int(ID[1])
+    position = int(ID[-1])
+
     hash[contig][position][0] = line[1:]
     if args.d:
       hash[contig][position][1] = (len(samples)-1) * [0,]
@@ -605,10 +602,10 @@ def processHash(samples, hash, windowSize, stepSize):
 
   return results
 
-#------------------------------------------------------------( printExcise )
+#==================================================================================================== ( excise )
+#------------------------------------------------------------( nasp )
 # print JSONP SNP file required for exporting selected regions in visualization web app
-def printNaspExcise(args):
-
+def naspExcise(args):
   DIR = args.DIR[0]
 
   if not os.path.exists("snpDensityOut/excise.jsonp"):
@@ -634,33 +631,88 @@ def printNaspExcise(args):
 
   return
 
-#------------------------------------------------------------( printNaspExport )
+#------------------------------------------------------------( cfsan )
+def cfsanExcise(args):
+  DIR = args.DIR[0]
+
+  if not os.path.exists("snpDensityOut/excise.jsonp"):
+    if os.path.exists(DIR + "snplist.txt"):
+      print("    creating EXCISE file ...")
+      file = readFile(DIR + "snplist.txt").strip().split("\n")
+      out = ["exciseContig({\"header\":\"\""]
+      results = {}
+      for i in range(0, len(file)):
+        line = file[i].split("\t")
+        contig = line[0]
+        position = line[1]
+        if contig not in results:
+          results[contig] = []
+        results[contig].append(str(position) + ":\"" + "\t".join(line) + "\"")
+      for contig in sorted(results):
+        out.append("\""+contig+"\":{"+",\n".join(results[contig]) + "}")
+      out = ",\n".join(out) + "})"
+
+      f = open("snpDensityOut/excise.jsonp", 'w')
+      f.write(out)
+      f.close()
+
+  return
+
+#------------------------------------------------------------( lyve )
+def lyveExcise(args):
+  DIR = args.DIR[0]
+
+  if not os.path.exists("snpDensityOut/excise.jsonp"):
+    if os.path.exists(DIR + "msa/out.snpmatrix.tsv"):
+      print("    creating EXCISE file ...")
+      file = readFile(DIR + "msa/out.snpmatrix.tsv").strip().split("\n")
+      out = ["exciseContig({\"header\":\""+file[0]+"\""]
+      results = {}
+      for i in range(1, len(file)):
+        line = file[i].split("\t")
+        contig = line[0]
+        position = line[1]
+        if contig not in results:
+          results[contig] = []
+        results[contig].append(str(position) + ":\"" + "\t".join(line) + "\"")
+      for contig in sorted(results):
+        out.append("\""+contig+"\":{"+",\n".join(results[contig]) + "}")
+      out = ",\n".join(out) + "})"
+
+      f = open("snpDensityOut/excise.jsonp", 'w')
+      f.write(out)
+      f.close()
+
+  return
+
+#==================================================================================================== ( export )
 # exclusive function for NASP SNP output
 # print JSONP MASTER file required for excising inverse of selected region
-def printNaspExport(args):
+def naspExport(args):
 
   DIR = args.DIR[0]
 
   results = {}
 
   #TODO:
-  # backup
+  # backup plan
   # 1. look for BAM files (use mpileup first)
   # 2. look for VCF files
 
   # open MASTER.TSV
-  if os.path.exists(DIR + "matrices/master.tsv"):
+  if False:
+  #if os.path.exists(DIR + "matrices/master.tsv"):
     print("    creating EXPORT file "+"\u2591"*25, end="")
     print("\r    creating EXPORT file ", end="")
     file = readFile(DIR + "matrices/master.tsv")
     file = file.split("\n")[:-1]
     samples = file[0].split("\t#SNPcall")[0].split("\t")[1:]
     for i in range(0, len(samples)):
-      samples[i] = "\""+samples[i].split("::")[0]+"\""
+      samples[i] = "\""+"".join(samples[i].split("::")[0])+"\""
 
     for i in range(1, len(file)):
       line = file[i].split("\t")[0:len(samples)+1]
-      contig = str(line[0].split("::")[0])
+      contig = str("::".join(line[0].split("::")[:-1]))
       seq = "".join(line[1:])
       if contig not in results:
         results[contig] = {}
@@ -674,20 +726,54 @@ def printNaspExport(args):
       for sample in results[contig]:
         results[contig][sample] = "".join(results[contig][sample])
 
+  # open VCF files
+# TODO: handle vdf files
+#  elif os.path.exists(DIR + "reference/reference.fasta"):
+#    print("    creating EXPORT file "+"\u2591"*25, end="")
+#    samples = readFile(DIR + "matrices/bestsnp.tsv")
+#    samples = samples.split("\n")[0].split("\t#SNPcall")[0].split("\t")[2:]
+#    for i in range(0, len(samples)):
+#      samples[i] = "".join(samples[i].split("::")[0])
+#    ref = readFile(DIR + "reference/reference.fasta")
+#    ref = ref.split(">")[0:]
+#    for i in range(0, len(ref)):
+#      ref[i] = ref[i].strip().split("\n")
+#      contig = ref[i][0]
+#      seq = "".join(ref[i][1:])
+#      if contig not in results:
+#        results[contig] = {"reference":seq}
+#        for sample in samples:
+#          results[contig][sample] = []
+#    for i in range(0, len(samples)):
+#      print(DIR + "gatk/" + samples[i] + "-bwamem-gatk.vcf")
+#      if os.path.exists(DIR + "gatk/" + samples[i] + "-bwamem-gatk.vcf"):
+#        vcf = subprocess.Popen("module load vcftools; vcftools --vcf " + DIR + "gatk/" + sample + "-bwamem-gatk.vcf --stdout --freq", universal_newlines=True, shell=True)
+#        vcf = vcf.stdout.read().split("\n")[:-1]
+
+
+
+
+#        print("\r    creating EXPORT file " + "\u2589"*int(i/len(samples)*25) + "\u2591"*(25-int((i)/len(samples)*25)), end="", flush=True)
+#      else:
+#        print("    skipping EXPORT file ...", end="")
+#        print()
+#        return
+
+#    quit()
+
   if results:
     out = ["exportContig({"]
     contigOut = []
     for contig in results:
-      contigOut.append("\n\"" + contig + "\":{")
+      contigTemp = []
+      contigTemp.append("\n\"" + contig + "\":{")
       dataOut = []
       for index in sorted(results[contig]):
         dataOut.append("\n" + str(index) + ":\"" + results[contig][index] + "\"")
-      contigOut.append(",".join(dataOut) + "}")
-    out.append(",".join(contigOut[:-1]) + "})")
+      contigTemp.append(",".join(dataOut) + "}")
+      contigOut.append("".join(contigTemp))
+    out.append(",".join(contigOut) + "})")
     out = "".join(out)
-    print(out)
-    quit()
-
 
     f = open("snpDensityOut/export.jsonp", 'w')
     f.write(out)
@@ -747,25 +833,20 @@ def main():
   elif args.lyve == True:
     results = lyveHash(args.DIR[0])
 
-  #TODO: add MASTER JSONP support for cfsan and lyveset
   print("(2/4) writing export and excise data files")
   if not os.path.exists("snpDensityOut/excise.jsonp"):
     if args.nasp == True:
-      printNaspExcise(args)
+      naspExcise(args)
     elif args.cfsan == True:
-      pass
+      cfsanExcise(args)
     elif args.lyve == True:
-      pass
+      lyveExcise(args)
   else:
     print("    EXCISE file already exists")
 
   if not os.path.exists("snpDensityOut/export.jsonp"):
     if args.nasp == True:
-      printNaspExport(args)
-    elif args.cfsan == True:
-      pass
-    elif args.lyve == True:
-      pass
+      naspExport(args)
   else:
     print("    EXPORT file already exists")
 
