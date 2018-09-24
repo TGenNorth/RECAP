@@ -217,7 +217,7 @@ def naspHash(args):
 
   threads = 26
   print("    waiting for threads to return "+"\u2591"*25, end="")
-  print("\r    waiting for threads to return ", end="")
+  print("\r    waiting for threads to return ", end="", flush=True)
 
   while threads > threading.activeCount():
     threads -= 1
@@ -694,21 +694,15 @@ def naspExport(args):
 
   results = {}
 
-  #TODO:
-  # backup plan
-  # 1. look for BAM files (use mpileup first)
-  # 2. look for VCF files
-
   # open MASTER.TSV
-  if False:
-  #if os.path.exists(DIR + "matrices/master.tsv"):
+  if os.path.exists(DIR + "matrices/master.tsv"):
     print("    creating EXPORT file "+"\u2591"*25, end="")
-    print("\r    creating EXPORT file ", end="")
+    print("\r    creating EXPORT file ", end="", flush=True)
     file = readFile(DIR + "matrices/master.tsv")
     file = file.split("\n")[:-1]
     samples = file[0].split("\t#SNPcall")[0].split("\t")[1:]
     for i in range(0, len(samples)):
-      samples[i] = "\""+"".join(samples[i].split("::")[0])+"\""
+      samples[i] = "".join(samples[i].split("::")[0])
 
     for i in range(1, len(file)):
       line = file[i].split("\t")[0:len(samples)+1]
@@ -726,41 +720,7 @@ def naspExport(args):
       for sample in results[contig]:
         results[contig][sample] = "".join(results[contig][sample])
 
-  # open VCF files
-# TODO: handle vdf files
-#  elif os.path.exists(DIR + "reference/reference.fasta"):
-#    print("    creating EXPORT file "+"\u2591"*25, end="")
-#    samples = readFile(DIR + "matrices/bestsnp.tsv")
-#    samples = samples.split("\n")[0].split("\t#SNPcall")[0].split("\t")[2:]
-#    for i in range(0, len(samples)):
-#      samples[i] = "".join(samples[i].split("::")[0])
-#    ref = readFile(DIR + "reference/reference.fasta")
-#    ref = ref.split(">")[0:]
-#    for i in range(0, len(ref)):
-#      ref[i] = ref[i].strip().split("\n")
-#      contig = ref[i][0]
-#      seq = "".join(ref[i][1:])
-#      if contig not in results:
-#        results[contig] = {"reference":seq}
-#        for sample in samples:
-#          results[contig][sample] = []
-#    for i in range(0, len(samples)):
-#      print(DIR + "gatk/" + samples[i] + "-bwamem-gatk.vcf")
-#      if os.path.exists(DIR + "gatk/" + samples[i] + "-bwamem-gatk.vcf"):
-#        vcf = subprocess.Popen("module load vcftools; vcftools --vcf " + DIR + "gatk/" + sample + "-bwamem-gatk.vcf --stdout --freq", universal_newlines=True, shell=True)
-#        vcf = vcf.stdout.read().split("\n")[:-1]
-
-
-
-
-#        print("\r    creating EXPORT file " + "\u2589"*int(i/len(samples)*25) + "\u2591"*(25-int((i)/len(samples)*25)), end="", flush=True)
-#      else:
-#        print("    skipping EXPORT file ...", end="")
-#        print()
-#        return
-
-#    quit()
-
+  # write results to jsonp file
   if results:
     out = ["exportContig({"]
     contigOut = []
@@ -769,7 +729,7 @@ def naspExport(args):
       contigTemp.append("\n\"" + contig + "\":{")
       dataOut = []
       for index in sorted(results[contig]):
-        dataOut.append("\n" + str(index) + ":\"" + results[contig][index] + "\"")
+        dataOut.append("\n\"" + str(index) + "\":\"" + results[contig][index] + "\"")
       contigTemp.append(",".join(dataOut) + "}")
       contigOut.append("".join(contigTemp))
     out.append(",".join(contigOut) + "})")

@@ -26,20 +26,31 @@ var sync;
 var display = "SNPs";
 var sort = "length";
 
-$(window).resize(function () {
-  resizeContig();
-  loadHandler();
-});
+// resize and reload data on page reload
+// if window event listener not loaded, use jquery
+if (window.addEventListener) {
+  window.addEventListener('resize', function () {
+    resizeContig();
+    loadHandler();
+  }, false);
+} else {
+  $(window).resize(function () {
+    resizeContig();
+    loadHandler();
+  });
+}
 
+// toggle contig display and resize window
+// retracts single contig view
 function closeContig() {
   currentContig = null;
   gs = [];
   $("#bottombar-wrapper").addClass("toggle");
   $("#dark-overlay").addClass("toggle");
-  
   resizeContig();
 }
 
+// toggles and resizes single contig menu
 function resizeContig() {
   topHeight = $("#graph-wrapper").height() + 30;
   $("#bottombar-wrapper").css("height", "auto");
@@ -129,24 +140,24 @@ function updateOut() {
     if (dygraphs[i]) {
     dygraphs[i].updateOptions(
       {
-        'file':getOut(i, display)
+        'file':getData(i, display)
       }
     );
   }}
   if (currentContig != null) {
     gs[2].updateOptions(
       {
-        'file':getOut(currentContig, "phi")
+        'file':getData(currentContig, "phi")
       }
     );
     gs[1].updateOptions(
       {
-        'file':getOut(currentContig, "depth")
+        'file':getData(currentContig, "depth")
       }
     );
     gs[0].updateOptions(
       {
-        'file':getOut(currentContig, "SNPs")
+        'file':getData(currentContig, "SNPs")
       }
     );
   }
@@ -182,36 +193,40 @@ function loadHandler() {
   }
 }
 
-// ================================================== ( Data Export )
+// ================================================== ( Data Export/Excise )
 // create download element
 function download(filename, text) {
   var element = document.createElement('a');
   document.body.appendChild(element);
   element.style.display = 'none';
-
+  // blob used for larger text files
   var blob = new Blob([text], {encoding:"UTF-8",type:"text/plain;charset=UTF-8"}),
       url = window.URL.createObjectURL(blob);
   element.href = url;
   element.download = filename;
   element.click();
   window.URL.revokeObjectURL(url);
-
   document.body.removeChild(element);
 }
 
+// invoke 'exciseData()' from 'excise.jsonp'
 function exciseData() {
   var file = document.createElement("script");
   file.src = "excise.jsonp?callback=exciseContig";
   document.body.insertBefore(file, document.body.firstChild);
 }
 
+// invoke 'exportData()' from 'export.jsonp'
 function exportData() {
+  console.log("1")
   var file = document.createElement("script");
   file.src = "export.jsonp?callback=exportContig";
   document.body.insertBefore(file, document.body.firstChild);
 }
 
+// returns fasta file for selected range and selected samples for download
 function exportContig(data) {
+  console.log("2")
   if (currentContig != null) {
     var checkedSamples = CHECKBOXreturnChecked();
     for (var i = 0; i < checkedSamples.length; i++) {
@@ -236,6 +251,7 @@ function exportContig(data) {
   }
 }
 
+// returns SNP matrix outside selected range for download
 function exciseContig(data) {
   if (currentContig != null) {
     range = gs[2].xAxisRange();
@@ -259,43 +275,42 @@ function exciseContig(data) {
 }
 
 // ================================================== ( Draw Contigs )
-
-function getOut(i, display) {
-  var out;
+// gather and return contig specific data 
+function getData(i, display) {
+  var data;
   var checkedSamples = CHECKBOXreturnChecked();
-    out = ("position");
-    if (display === "phi") {
-      out += ",phi"
-    } else {
+  data = ("position");
+  if (display === "phi") {
+    data += ",phi"
+  } else {
+    for (var k = 0; k < checkedSamples.length; k++) { 
+    //for (index in checkedSamples) {
+      data += ","+samples[checkedSamples[k]]
+    }
+  }
+  data += "\n"
+  for (var j = 0; j < contigs[i].data.length; j++) {
+    var line = "";
+    line += contigs[i].data[j].position[0];
+    if (display === "SNPs") {
       for (var k = 0; k < checkedSamples.length; k++) { 
       //for (index in checkedSamples) {
-        out += ","+samples[checkedSamples[k]]
+        line += ","+contigs[i].data[j].SNPs[checkedSamples[k]]
       }
+    } else if (display === "depth") {
+      for (var k = 0; k < checkedSamples.length; k++) { 
+      //for (index in checkedSamples) {
+        line += ","+contigs[i].data[j].depth[checkedSamples[k]]
+      }
+    } else if (display === "phi") {
+      line += ","+Number.parseFloat(contigs[i].data[j].phi)
     }
-    out += "\n"
-    for (var j = 0; j < contigs[i].data.length; j++) {
-      var line = "";
-      line += contigs[i].data[j].position[0];
-      if (display === "SNPs") {
-        for (var k = 0; k < checkedSamples.length; k++) { 
-        //for (index in checkedSamples) {
-          line += ","+contigs[i].data[j].SNPs[checkedSamples[k]]
-        }
-      } else if (display === "depth") {
-        for (var k = 0; k < checkedSamples.length; k++) { 
-        //for (index in checkedSamples) {
-          line += ","+contigs[i].data[j].depth[checkedSamples[k]]
-        }
-      } else if (display === "phi") {
-        line += ","+Number.parseFloat(contigs[i].data[j].phi)
-      }
-      out += line + "\n"
-      if (contigs[i].data.length === 1) {
-        out += contigs[i].data[j].position[1]+line.substr(1, line.length) + "\n"
-      }
+    data += line + "\n"
+    if (contigs[i].data.length === 1) {
+      data += contigs[i].data[j].position[1]+line.substr(1, line.length) + "\n"
     }
-
-  return out;
+  }
+  return data;
 }
 
 // create and build all graph objects
@@ -319,16 +334,19 @@ function drawGraphs() {
      "</div>"].join('\n');
   }
 
+  // rebuild all DOMs in HTML on page refresh
   buildQuantity();
   buildDisplay();
   buildSort();
   buildNavigation();
   buildBottom();
 
+  // set up progressive page scrolling loader
   loadContig = Math.min(10,getMax()-currentPage*maxContig-1);
   unloadContig = Math.max(loadContig-10,0);
   progressiveLoad();
 
+  // change description
   document.getElementById("graphSort").innerHTML = "Showing " + maxContig + " contigs: " + display + ", sorted by " + sort;
   $('.loading').css('display', 'none');
 }
@@ -401,6 +419,7 @@ function fillGraphs(type, i, display) {
     }
   }
 
+  // formats legend of each contig
   function legendFormatter(data) {
     var legend = '<b>Position: </b>';
     if (data.x >= 0) {
@@ -428,111 +447,110 @@ function fillGraphs(type, i, display) {
     return legend
   }
 
-
-    var g = new Dygraph(
-      document.getElementById(type+"graph"+i),
-      getOut(i, display),
-      {
-        plugins: [
-          zoomReset
-        ],
-        axes: {
-          y: {
-            axisLabelWidth: 80,
-          }
-        },
-        highlightCallback: function(e, x, pts, row) {
-          $('#mouseFollow').css('display','block')
-        },
-        unhighlightCallback: function(e) {
-          $('#mouseFollow').css('display','none')
-        },
-        ylabel: yLabel,
-        labelsShowZeroValues: true,
-        labelsSeparateLines: true,
-        labelsDiv: type+'legend'+i,
-        legend: 'always',
-        legendFormatter: legendFormatter,
-        valueRange: [null, null],
-        yRangePad: 5,
-        xRangePad: 5,
-        digitsAfterDecimal: 3,
-        animatedZooms: true,
-        showRangeSelector: false,
-        rangeSelectorHeight: 25,
-        highlightSeriesOpts: {
-          strokeWidth: 2,
-          strokeBorderWidth: 1,
-          highlightCircleSize: 4
-        },
-        
-      }
-    );
-    // reverse y-axis for phi statistic
-    if (display === "phi") {
-      g.updateOptions({
-        valueRange: [1,getLowestPhi(g)/2],
-        logscale: true,
-        axes: {
-          y: {
-            ticker: function(min, max, pixels) {
-              tickList = [
-                { v: 1.0 },
-                { v: 1.0, label: "1" },
-                { v: 0.05 },
-                { v: 0.05, label: "0.05" },
-              ]
-              // add custom ticks for phi graph formatting
-              if (getLowestPhi(g) < 0.01) {
-                tickList.push({ v: 0.01 },{ v: 0.01, label: "0.01" })
-              }
-              if (getLowestPhi(g) < 0.001) {
-                tickList.push({ v: 0.001 },{ v: 0.001, label: "0.001" })
-              }
-              if (getLowestPhi(g) < 0.0001) {
-                tickList.push({ v: 0.0001 },{ v: 0.0001, label: "< 0.0001" })
-              } else if (getLowestPhi(g) < 0.1) {
-                tickList.push({ v: 0.1 },{ v: 0.1, label: "0.1" })
-              }
-              return tickList;
+  // make new graph object for each contig
+  var g = new Dygraph(
+    document.getElementById(type+"graph"+i),
+    getData(i, display),
+    {
+      plugins: [
+        zoomReset
+      ],
+      axes: {
+        y: {
+          axisLabelWidth: 80,
+        }
+      },
+      highlightCallback: function(e, x, pts, row) {
+        $('#mouseFollow').css('display','block')
+      },
+      unhighlightCallback: function(e) {
+        $('#mouseFollow').css('display','none')
+      },
+      ylabel: yLabel,
+      labelsShowZeroValues: true,
+      labelsSeparateLines: true,
+      labelsDiv: type+'legend'+i,
+      legend: 'always',
+      legendFormatter: legendFormatter,
+      valueRange: [null, null],
+      yRangePad: 5,
+      xRangePad: 5,
+      digitsAfterDecimal: 3,
+      animatedZooms: true,
+      showRangeSelector: false,
+      rangeSelectorHeight: 25,
+      highlightSeriesOpts: {
+        strokeWidth: 2,
+        strokeBorderWidth: 1,
+        highlightCircleSize: 4
+      },
+    }
+  );
+  // reverse y-axis for phi statistic
+  if (display === "phi") {
+    g.updateOptions({
+      valueRange: [1,getLowestPhi(g)/2],
+      logscale: true,
+      axes: {
+        y: {
+          ticker: function(min, max, pixels) {
+            tickList = [
+              { v: 1.0 },
+              { v: 1.0, label: "1" },
+              { v: 0.05 },
+              { v: 0.05, label: "0.05" },
+            ]
+            // add custom ticks for phi graph formatting
+            if (getLowestPhi(g) < 0.01) {
+              tickList.push({ v: 0.01 },{ v: 0.01, label: "0.01" })
             }
-          }
-        },
-        // highlight portions of graph where phi statistic is under 0.05 "statistically significant"
-        underlayCallback: function(canvas, area, g) {
-          canvas.fillStyle = "rgba(0, 255, 216, 0.3)";
-          function highlight(start, end) {
-            var left = g.toDomXCoord(start);
-            var right = g.toDomXCoord(end);
-            var width = right - left;
-            canvas.fillRect(left, area.y, width, area.h);
-          }
-          var minX = g.getValue(0,0);
-          var maxX = g.getValue(g.numRows()-1,0);
-          // check slope crossing 0.05 threshold and find X given Y=0.05
-          for (var j = 0; j < g.numRows()-1; j++) {
-            if (g.getValue(j,1) >= 0.05 && g.getValue(j+1,1) < 0.05) {
-              var start = g.getValue(j,0);
-              //console.log("slopeU:",Math.log10(g.getValue(i+1,1))-Math.log10(g.getValue(i,1)))
-              //console.log("y    U:",g.getValue(i+1,1)*Math.pow((10),Math.log10(g.getValue(i,1))-Math.log10(g.getValue(i+1,1))))
-              //console.log("phi  U:",g.getValue(i,1))
-              //console.log("X1   U:",(Math.log10(0.05/g.getValue(i+1,1)))/(Math.log10(g.getValue(i+1,1))-Math.log10(g.getValue(i,1))))
-              //console.log("X2   U:",(Math.log10(g.getValue(i+1,1)/g.getValue(i+1,1)))/(Math.log10(g.getValue(i+1,1))-Math.log10(g.getValue(i,1))))
-              highlight(g.getValue(j+1,0)+((Math.log10(0.05/g.getValue(j+1,1)))/(Math.log10(g.getValue(j+1,1))-Math.log10(g.getValue(j,1)))*(g.getValue(j+1,0)-g.getValue(j,0))),g.getValue(j+1,0))
-            } else if (g.getValue(j,1) < 0.05 && g.getValue(j+1,1) >= 0.05) {
-              var start = g.getValue(j,0);
-              //console.log("slopeD:",Math.log10(g.getValue(i,1))-Math.log10(g.getValue(i+1,1)))
-              //console.log("y    D:",g.getValue(i,1)*Math.pow((10),Math.log10(g.getValue(i+1,1))-Math.log10(g.getValue(i,1))))
-              //console.log("phi  D:",g.getValue(i+1,1))
-              highlight(g.getValue(j+1,0)+((Math.log10(0.05/g.getValue(j+1,1)))/(Math.log10(g.getValue(j,1))-Math.log10(g.getValue(j+1,1)))*(g.getValue(j,0)-g.getValue(j+1,0))),g.getValue(j,0))
-            } else if (g.getValue(j,1) < 0.05 && g.getValue(j+1,1) < 0.05) {
-              highlight(g.getValue(j,0),g.getValue(j+1,0))
+            if (getLowestPhi(g) < 0.001) {
+              tickList.push({ v: 0.001 },{ v: 0.001, label: "0.001" })
             }
+            if (getLowestPhi(g) < 0.0001) {
+              tickList.push({ v: 0.0001 },{ v: 0.0001, label: "< 0.0001" })
+            } else if (getLowestPhi(g) < 0.1) {
+              tickList.push({ v: 0.1 },{ v: 0.1, label: "0.1" })
+            }
+            return tickList;
           }
         }
-      });
-    }
-    return g;
+      },
+      // highlight portions of graph where phi statistic is under 0.05 "statistically significant"
+      underlayCallback: function(canvas, area, g) {
+        canvas.fillStyle = "rgba(0, 255, 216, 0.3)";
+        function highlight(start, end) {
+          var left = g.toDomXCoord(start);
+          var right = g.toDomXCoord(end);
+          var width = right - left;
+          canvas.fillRect(left, area.y, width, area.h);
+        }
+        var minX = g.getValue(0,0);
+        var maxX = g.getValue(g.numRows()-1,0);
+        // check slope crossing 0.05 threshold and find X given Y=0.05
+        for (var j = 0; j < g.numRows()-1; j++) {
+          if (g.getValue(j,1) >= 0.05 && g.getValue(j+1,1) < 0.05) {
+            var start = g.getValue(j,0);
+            // console.log("slopeU:",Math.log10(g.getValue(i+1,1))-Math.log10(g.getValue(i,1)))
+            // console.log("y    U:",g.getValue(i+1,1)*Math.pow((10),Math.log10(g.getValue(i,1))-Math.log10(g.getValue(i+1,1))))
+            // console.log("phi  U:",g.getValue(i,1))
+            // console.log("X1   U:",(Math.log10(0.05/g.getValue(i+1,1)))/(Math.log10(g.getValue(i+1,1))-Math.log10(g.getValue(i,1))))
+            // console.log("X2   U:",(Math.log10(g.getValue(i+1,1)/g.getValue(i+1,1)))/(Math.log10(g.getValue(i+1,1))-Math.log10(g.getValue(i,1))))
+            highlight(g.getValue(j+1,0)+((Math.log10(0.05/g.getValue(j+1,1)))/(Math.log10(g.getValue(j+1,1))-Math.log10(g.getValue(j,1)))*(g.getValue(j+1,0)-g.getValue(j,0))),g.getValue(j+1,0))
+          } else if (g.getValue(j,1) < 0.05 && g.getValue(j+1,1) >= 0.05) {
+            var start = g.getValue(j,0);
+            // console.log("slopeD:",Math.log10(g.getValue(i,1))-Math.log10(g.getValue(i+1,1)))
+            // console.log("y    D:",g.getValue(i,1)*Math.pow((10),Math.log10(g.getValue(i+1,1))-Math.log10(g.getValue(i,1))))
+            // console.log("phi  D:",g.getValue(i+1,1))
+            highlight(g.getValue(j+1,0)+((Math.log10(0.05/g.getValue(j+1,1)))/(Math.log10(g.getValue(j,1))-Math.log10(g.getValue(j+1,1)))*(g.getValue(j,0)-g.getValue(j+1,0))),g.getValue(j,0))
+          } else if (g.getValue(j,1) < 0.05 && g.getValue(j+1,1) < 0.05) {
+            highlight(g.getValue(j,0),g.getValue(j+1,0))
+          }
+        }
+      }
+    });
+  }
+  return g;
   // build all interactive buttons
   
 }
@@ -808,6 +826,7 @@ function CHECKBOXreturnChecked() {
 // ================================================== ( Process JSON )
 // callback JSON file and initiate 
 function readData() {
+  closeContig();
   var file = document.createElement("script");
   file.src = "snpDensityMatrix.jsonp?callback=buildGraphs";
   document.body.insertBefore(file, document.body.firstChild);
@@ -836,17 +855,9 @@ function buildGraphs(data) {
   topHeight = $("#graph-wrapper").height() + 30;
 }
 
-// main function runs on page load
-jQuery(document).ready(function($) {
-  closeContig();
-  readData();
-});
-
-
-
-
-
-
-
-
-
+// invoke 'readData()' from 'snpDensityOut.jsonp'
+if (window.addEventListener) {
+  window.addEventListener('load', readData, false);
+} else {
+  document.addEventListener('load', readData, true);
+}
