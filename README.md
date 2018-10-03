@@ -1,5 +1,5 @@
 # snpDensity
-`snpDensity` is a tool used to analize **SNP pipeline output** and build graphical output for **SNP density**, **read depth**, and **PHI statistic**.
+`snpDensityMatrix` is a tool used to analize **SNP pipeline output** and build graphical output for **SNP density**, **read depth**, and **PHI statistic**. 
 
 ---
 ## Getting Started
@@ -8,7 +8,12 @@
 * [SAMTools](https://github.com/samtools/samtools): Version 1.4.1 or greater.
 * [VCFTools](https://github.com/vcftools/vcftools): Version 0.1.15 or greater.
 
-### Installation:
+### Basic Installation:
+`snpDensityMatrix` primarily runs by calling the `snpDensityMatrix.py` script and can be cloned basically anywhere without the need to compile anything. All of the accompanying **HTML**, **CSS**, and **JavaScript** files are a barebones offline web application that will be copied to the working directory upon use and therefore must be kept in their current locations after cloning the repo.
+
+**The following is a strict step by step guide that must be followed in the proper order:**  
+1. Clone this repo to the directory of your choosing.
+2. Done.
 
 ---
 ## Usage
@@ -17,17 +22,23 @@
 `$ snpDensityMatrix.py [-h, --help] [--window WINDOW] [--step STEP] [--nasp | --cfsan | --lyve | --snvphyl] DIR`
 
 ### Arguments:
-The following is a list of arguments for *snpDensityMatrix*:  
-`[-h, --help]` Displays the help menu for snpDensityMatrix before exiting.  
-`[--window WINDOW]` Set size of capture window to measure snp density.  
-`[--step STEP]` Set step size to move window down snp matrix.  
-`[--nasp | --cfsan | --lyve | --snvphyl]` Flag used for snp pipeline format.  
-`DIR`Root directory for snp pipeline output.
+* `[-h, --help]`  
+  - Displays the help menu for snpDensityMatrix before exiting.  
+* `[--window WINDOW]`  
+  - Optional argument with a default value of **10000**. Set size of capture window to measure snp density.  
+* `[--step STEP]`  
+  - Optional argument with a default value of **5000**. Set step size to move window down snp matrix.  
+* `[--nasp | --cfsan | --lyve | --snvphyl]`  
+  - Required argument must be chosen and must match the intended snp pipeline format. Flag used for snp pipeline format.  
+* `DIR`  
+  - Required Positional argument. Root directory for snp pipeline output.
 
 ### Examples:
-Running `snpDensityMatrix` to get the snp density visualization for snp pipeline output located at **'./example/snpOut/'**, with a window size of **10000** and a step size of **5000**:  
-`$ snpDensityMatrix.py --window 1000 --step 500 --nasp ./example/snpOut/`  
-Would result in the command line output:  
+Running `snpDensityMatrix` to get the snp density visualization for snp pipeline output located at **'./example/snpOut/'**, with a window size of **1000** and a step size of **500**:
+```
+$ /installDirectory/snpDensityMatrix.py --window 1000 --step 500 --nasp ./example/snpOut/
+```  
+Would result in the command line output:
 ```
 ====================( Job Starting: snpDensityMatrix.py )
 (1/4) gathering coverage from BAM/VCF files
