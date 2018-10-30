@@ -61,6 +61,7 @@ Would result in the command line output:
 ====================( Job Complete: snpDensityMatrix.py )
 ```
 
+---
 # nonHomologous
 `nonHomologous` is a separate script for detecting non-homologous recombination. It also operates on **SNP Pipeline output**, but looks at the accessory genomes of all the samples in your dataset.
 
