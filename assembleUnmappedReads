@@ -1,0 +1,270 @@
+#!/bin/bash
+#
+# Create an assembly, for each bam in the current directory, from all the unaligned segments.
+
+set -euo pipefail
+# If nullglob is set, Bash allows filename patterns which match no files to
+# expand to a null string, rather than themselves.
+# Without the nullglob option, the *.bam glob pattern would exand to the literal
+# string '*.bam'. This leads to issues such as when trying to check for the
+# presense of bam files in the current directory because there will always be at
+# least one result.
+# 
+# An alternative option would be failglob, however, this terminates the script
+# making it difficult to provide an error message.
+shopt -s nullglob
+if [[ "${DEBUG:-}" == true ]]; then
+    set -x
+fi
+
+declare -r PROGRAM_NAME="${0##*/}"
+
+declare -r COLUMNS=$(tput cols)
+
+# Default options
+declare -i SPADES_THREADS=4
+declare -i SPADES_WALLTIME_HOURS=48
+declare -i SPADES_MEMORY_GB=20
+
+# ANSI color escape codes
+declare -r RED='\033[0;31m'
+declare -r GREEN='\033[0;32m'
+declare -r NC='\033[0m' # No Color
+
+# Dependencies
+SAMTOOLS="samtools"
+SPADES="spades.py"
+BEDTOOLS="bedtools"
+
+################################################################################
+# check_dependencies parses the commandline flags/arguments.
+# Globals:
+#   COLUMNS
+#   GREEN
+#   RED
+#   NC
+#   SAMTOOLS
+#   SPADES
+#   BEDTOOLS
+# Arguments:
+#   NONE
+# Returns:
+#   1 if a dependency is not found
+################################################################################
+function check_dependencies() {
+    local pass_fail_length=6
+    local move_to_column=""
+    if [[ -n "$COLUMNS" ]]; then
+        align_right=$((COLUMNS - pass_fail_length))
+        move_to_column="\\033[${align_right}G"
+    fi
+        
+    local pass="${move_to_column}${GREEN}[PASS]${NC}"
+    local fail="${move_to_column}${RED}[FAIL]${NC}"
+    local all_pass=true
+
+    printf "Checking %s..." "$SAMTOOLS"
+    if command -v "$SAMTOOLS" >/dev/null 2>&1; then
+        printf "%b\n" "$pass"
+    else
+        printf "%b\n" "$fail"
+        all_pass=false
+    fi
+
+    printf "Checking %s..." "$BEDTOOLS"
+    if command -v "$BEDTOOLS" >/dev/null 2>&1; then
+        printf "%b\n" "$pass"
+    else
+        printf "%b\n" "$fail"
+        all_pass=false
+    fi
+
+    printf "Checking %s..." "$SPADES"
+    if command -v "$SPADES" >/dev/null 2>&1; then
+        printf "%b\n" "$pass"
+    else
+        printf "%b\n" "$fail"
+        all_pass=false
+    fi
+
+    if [[ "$all_pass" == false ]]; then
+        return 1
+    fi
+
+    return 0
+}
+
+
+################################################################################
+# print_usage will write a usage message to STDERR and exit 1.
+# Globals:
+#   PROGRAM_NAME: Name of this program as called on the command line.
+# Arguments:
+#   $@: all arguments will be appended as an error message.
+# Returns:
+#   None
+################################################################################
+function print_usage {
+    {
+    printf "Create an assembly, for each bam in the current directory, from all the unaligned segments.\n"
+    printf "\n"
+    printf "Usage:\n"
+    printf "\t%s [-h|--help]\n" "$PROGRAM_NAME"
+    echo
+    echo "Options:"
+    # Print options indented with a tab and consistently spaced
+    printf "\t%-15s%s\n" "-h|--help" "print this usage message"
+    printf "\t%-15s%s\n" "--st" "spades threads (default: $SPADES_THREADS)"
+    printf "\t%-15s%s\n" "--sm" "spades memory gb (default: $SPADES_MEMORY_GB)"
+    printf "\t%-15s%s\n" "--sw" "spades walltime hours (default: $SPADES_WALLTIME_HOURS)"
+    echo
+    echo "Synopsis:"
+    printf "\t- Find all the bam files in the current directory\n"
+    printf "\t- Filter positions with the bit 4 'segment unaligned' flag set (See SAM/BAM Format Specification)\n"
+    printf "\t- Sort by read name\n"
+    printf "\t- Convert the unaligned positions to paired fastq files\n"
+    printf "\t- Assemble the fastq read files with spades.py\n"
+    echo
+    echo "The script assumes bam files follow the following naming conventions:"
+    echo
+    echo "<SAMPLE_NAME>-[a-zA-Z0-9]*.bam"
+    echo
+    echo "The assembly will be in a file named ./<SAMPLE_NAME>.spades/contigs.fasta"
+    echo "A symbolic link to the assembly, ./<SAMPLE_NAME>.fasta, is created for convenience."
+    echo
+    #echo "Authors:"
+    #printf "\tDarrin Lemmer <dlemmer@tgen.org>\n"
+    #printf "\tJason Travis <jtravis@tgen.org>\n"
+    echo
+
+    # Append all arguments as an error message.
+    if [[ "$#" -gt 0 ]]; then
+        echo
+        echo "[$(date +'%Y-%m-%dT%H:%M:%S%z')]: $*"
+    fi
+    } 2>&1
+    exit 1
+}
+
+################################################################################
+# parse_args parses the commandline flags/arguments.
+# Globals:
+#   None
+# Arguments:
+#   $@:              commandline arguments
+# Returns:
+#   TODO
+################################################################################
+function parse_args {
+    #if [ "$#" -eq 0 ]; then
+    #    print_usage "insufficient arguments"
+    #fi
+
+    while [[ "$#" -gt 0 ]]; do
+    key="$1"
+
+    case $key in
+        -h|--help)
+        print_usage # NOTE: hidden function exit point
+        ;;
+        --st)
+        SPADES_THREADS=$2
+        shift # past argument
+        ;;
+        --sm)
+        SPADES_MEMORY_GB=$2
+        shift # past argument
+        ;;
+        --sw)
+        SPADES_WALLTIME_HOURS=$2
+        shift # past argument
+        ;;
+        *)
+        # unknown option
+        if [[ "$key" == -* ]]; then
+            print_usage "unsupported flag: $key"
+        fi
+        ;;
+    esac
+    shift # past argument or value
+    done
+}
+
+function main() {
+    local bams=( *.bam )
+
+    parse_args "$@"
+
+    if ! check_dependencies; then
+        exit 1
+    fi
+
+    if [[ "${#bams}" -eq 0 ]]; then
+        print_usage "No bam files found in $PWD"
+    fi
+
+    printf "Submitting unaligned segment assembly jobs for %d bam files found in %s\n" "${#bams[@]}" "$PWD"
+    echo
+
+    for f in *.bam; do
+        if [[ $f =~ ^(.*?)(-[a-zA-Z0-9]*\.bam)$ ]]; then
+            sample=${BASH_REMATCH[1]}
+
+            # set -euo pipefail
+            #          set shell options to exit immediately on the first error
+            # samtools view
+            # -f INT   only include reads with all bits set in INT set in FLAG [0]
+            #          bit 4 means segment unmapped
+            #          See https://samtools.github.io/hts-specs/SAMv1.pdf Section 1.4.2
+            # samtools sort
+            # -n       sort by read name
+            # bedtools bamtofastq
+            # -fq /dev/stdout -fq2 /dev/stdout instead of creating a pair of read files, create an interleaved read file.
+            #                                  Spades supports either paired or interleaved reads so it could go either way.
+            #                                  The advantage of using interleaved reads here is it is easier to compress the
+            #                                  stream with gzip.
+            job_id=$(sbatch \
+                -D "$PWD" \
+                -J "filter-$sample" \
+                -c 1 --mem=3G --time=8:00:00 \
+                --mail-type=FAIL \
+                --wrap="set -euo pipefail; \
+                    samtools view -bh -f 4 $f \
+                    | samtools sort -n -o ${sample}_unmapped.bam -; \
+                    bedtools bamtofastq \
+                        -i ${sample}_unmapped.bam \
+                        -fq /dev/stdout \
+                        -fq2 /dev/stdout \
+                    | gzip > ${sample}_interleaved_unmapped.fastq.gz"
+            )
+            if [[ -n "$COLUMNS" ]]; then
+                offset=$((COLUMNS - ${#job_id}))
+                move_to_column="\\033[${offset}G"
+            else
+                move_to_column=""
+            fi
+            printf "Filter:  %s %b\n" "${sample}_interleaved_unmapped.fastq.gz" "${move_to_column}${job_id}"
+	    job_id=`echo $job_id | sed 's/Submitted batch job //g'`
+
+            job_id_2=$(sbatch \
+                -D "$PWD" \
+                -J "spades-$sample" \
+                -d afterok:$job_id \
+                -c $SPADES_THREADS --mem=${SPADES_MEMORY_GB}G --time=$SPADES_WALLTIME_HOURS:00:00 \
+                --mail-type=FAIL \
+                --wrap="set -euo pipefail; \
+                    spades.py \
+                        -o ${sample}.spades \
+                        --threads $SPADES_THREADS \
+                        --memory $SPADES_MEMORY_GB \
+                        --careful \
+                        --12 ${sample}_interleaved_unmapped.fastq.gz \
+                    && ln -s ${sample}.spades/contigs.fasta ${sample}.fasta"
+            )
+
+            printf "Assemble: %s %b\n" "${sample}.fasta" "${move_to_column}${job_id_2}"
+        fi
+    done
+}
+
+main "$@"
