@@ -261,9 +261,10 @@ function exciseContig(data) {
     var keys = Object.keys(data);
     out = [data[keys[0]]]
     for (var i = 1; i < keys.length; i++) {
-      var positions = Object.keys(data[contigs[i-1].name])
+      var positions = Object.keys(data[keys[i]])
       for (var j = 0; j < positions.length; j++) {
         if (currentContig != i-1) {
+          //console.log(data[keys[i]][positions[j]])
           out.push(data[keys[i]][positions[j]])
         } else if (positions[j] < left || positions[j] > right) {
           out.push(data[keys[i]][positions[j]])
