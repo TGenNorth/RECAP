@@ -1,4 +1,4 @@
-# snpDensity
+# RECAP
 `snpDensityMatrix` is a tool used to analize **SNP pipeline output** and build graphical output for **SNP density**, **read depth**, and **PHI statistic**. It is designed to detect probable homologous recombination events, which are often characterized as regions of abnormally high SNP density.
 
 ---
