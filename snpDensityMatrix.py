@@ -133,17 +133,17 @@ def readFile(file):
 #------------------------------------------------------------( bamThread )
 # used to thread out handling BAM/VCF files
 # decent speed improvement for smaller/mid range data sets
-def bamThread(DIR, hash, snpPositions, sample):
-  if not os.path.exists("snpDensityOut/" + "".join(sample.split(" ")) + "-Depth.txt"):
+def bamThread(DIR, hash, snpPositions, samples, i):
+  if not os.path.exists("snpDensityOut/" + "".join(samples[i].split(" ")) + "-Depth.txt"):
 
     # get depth from BAM file (faster than VCF)
-    if os.path.exists(DIR + "bwamem/" + sample + "-bwamem.bam"):
-      coverage = subprocess.Popen("module load samtools; samtools depth -b snpDensityOut/snpPositions.txt " + DIR + "bwamem/" + sample + "-bwamem.bam", universal_newlines=True, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if os.path.exists(DIR + "bwamem/" + samples[i] + "-bwamem.bam"):
+      coverage = subprocess.Popen("module load samtools; samtools depth -b snpDensityOut/snpPositions.txt " + DIR + "bwamem/" + samples[i] + "-bwamem.bam", universal_newlines=True, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
       coverage, coverageERR = coverage.communicate()
 
     # if no BAM file, get depth from VCF file
-    elif os.path.exists(DIR + "gatk/" + sample + "-bwamem-gatk.vcf"):
-      coverage = subprocess.Popen("module load vcftools; vcftools --vcf " + DIR + "gatk/" + sample + "-bwamem-gatk.vcf --positions snpDensityOut/snpPositions.txt --site-depth --stdout | awk 'NR > 1 {print $1 \"\t\" $2 \"\t\" $3}'", universal_newlines=True, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    elif os.path.exists(DIR + "gatk/" + samples[i] + "-bwamem-gatk.vcf"):
+      coverage = subprocess.Popen("module load vcftools; vcftools --vcf " + DIR + "gatk/" + samples[i] + "-bwamem-gatk.vcf --positions snpDensityOut/snpPositions.txt --site-depth --stdout | awk 'NR > 1 {print $1 \"\t\" $2 \"\t\" $3}'", universal_newlines=True, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
       coverage, coverageERR = coverage.communicate()
 
     # if no BAM or VCF file, then write in coverage as 0
@@ -152,11 +152,11 @@ def bamThread(DIR, hash, snpPositions, sample):
       for j in range(0, len(coverage)):
         coverage[j] += "\t0"
       coverage = "\n".join(coverage)
-    f = open("snpDensityOut/" + "".join(sample.split(" ")) + "-Depth.txt", 'w')
+    f = open("snpDensityOut/" + "".join(samples[i].split(" ")) + "-Depth.txt", 'w')
     f.write(coverage)
     f.close()
   else:
-    coverage = readFile("snpDensityOut/" + "".join(sample.split(" ")) + "-Depth.txt")
+    coverage = readFile("snpDensityOut/" + "".join(samples[i].split(" ")) + "-Depth.txt")
   if coverage.split("\n")[-1] == "":
     coverage = coverage.split("\n")[:-1]
   else:
@@ -165,7 +165,7 @@ def bamThread(DIR, hash, snpPositions, sample):
   # assemble hash
   for line in coverage:
     line = line.split("\t")
-    hash[line[0]][int(line[1])][1].append(int(line[2]))
+    hash[line[0]][int(line[1])][1][i-1] = int(line[2])
 
 #------------------------------------------------------------( naspCoverage )
 def naspHash(args):
@@ -199,6 +199,8 @@ def naspHash(args):
       hash[str(line[0])] = {}
     if int(line[1]) not in hash[line[0]]:
       hash[line[0]][int(line[1])] = [[],[]]
+      for i in range(1, len(samples)):
+        hash[line[0]][int(line[1])][1].append(0)
 
   # write SNP coverage to files
   if args.d:
@@ -211,7 +213,7 @@ def naspHash(args):
       print("    reading file \"./snpDensityOut/" + "".join(samples[i].split(" ")) + "-Depth.txt\" (" + str(i) + " of " + str(len(samples) - 1) + ")")
     while threading.activeCount() > 10:
       time.sleep(1)
-    t = threading.Thread(target=bamThread, args = [DIR, hash, snpPositions, samples[i]])
+    t = threading.Thread(target=bamThread, args = [DIR, hash, snpPositions, samples, i])
     t.daemon = True
     t.start()
 
@@ -822,8 +824,8 @@ def main():
   # }
 
   # print results to file
-  print("(4/4) writing results csv file")
-  print("    creating file \"./snpDensityOut/snpDensityMatrix.csv\"")
+  print("(4/4) writing results jsonp file")
+  print("    creating file \"./snpDensityOut/snpDensityMatrix.jsonp\"")
   printResults(results)
 
   timer.getTime()
