@@ -6,7 +6,7 @@ html, body {
   overflow-y: hidden;
 }
 
-#link{
+.link{
   cursor:pointer;
   color:blue;
 }
