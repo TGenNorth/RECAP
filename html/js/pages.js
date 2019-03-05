@@ -142,10 +142,10 @@ function updateOut() {
         let endBP = contigs[i].data[contigs[i].data.length-1].position[1];
         dygraphs[i].updateOptions(
           {
-          ylabel:null,
           file:getData(i, display),
           valueRange: [0, maxY],
           legend: 'never',
+          gridLineWidth: 0.001,
             axes: {
               x: {
                 ticker: function(min, max, pixels) {
@@ -183,6 +183,7 @@ function updateOut() {
           ylabel:yLabel,
           valueRange: [null, null],
           legend: 'always',
+          gridLineWidth: 0.3,
             axes: {
               x: {
                 independentTicks: true,
@@ -255,17 +256,15 @@ function loadHandler() {
   for (var i = (currentPage*maxContig); i < getMax(); i++) {
     if (i >= (currentPage*maxContig)+unloadContig && i <= (currentPage*maxContig)+loadContig) {
       if (view == "adjusted") {
-        let graphWidth = (contigs[i].data[contigs[i].data.length-1].position[1] - contigs[i].data[0].position[0])/totalRange*100;
+        let graphWidth = (contigs[i].data[contigs[i].data.length-1].position[1])/totalRange*100;
         let leftWidth = (contigs[i].data[0].position[0] - minBP)/totalRange*100;
         if (graphWidth < 5) {
           graphWidth = 5;
         }
         $("#graph"+i).css("width",graphWidth+"%");
-        $("#graph"+i).css("left",leftWidth+"%");
         $(".graph").css("background-color","white");
       } else {
         $("#graph"+i).css("width","100%");
-        $("#graph"+i).css("left","0px");
         $(".graph").css("background-color","");
       }
     }
@@ -365,15 +364,23 @@ function getData(i, display) {
   var data;
   var checkedSamples = CHECKBOXreturnChecked();
   data = ("position");
+  var defaultLine = ""
   if (display === "phi") {
     data += ",phi"
+    defaultLine = ",0"
   } else {
     for (var k = 0; k < checkedSamples.length; k++) { 
     //for (index in checkedSamples) {
       data += ","+samples[checkedSamples[k]]
+      defaultLine += ",0"
     }
   }
   data += "\n"
+  if (view === "adjusted") {
+    data += "1" + defaultLine + "\n";
+    data += String(parseInt(contigs[i].data[0].position[0]-1)) + defaultLine + "\n";
+  }
+    
   for (var j = 0; j < contigs[i].data.length; j++) {
     var line = "";
     line += contigs[i].data[j].position[0];
@@ -395,6 +402,7 @@ function getData(i, display) {
       data += contigs[i].data[j].position[1]+line.substr(1, line.length) + "\n"
     }
   }
+  console.log(data)
   return data;
 }
 
