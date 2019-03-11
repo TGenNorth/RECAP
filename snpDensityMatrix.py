@@ -173,7 +173,12 @@ def naspHash(args):
   DIR = args.DIR[0]
 
   # open "matrices/bestsnp.tsv"
-  file = readFile(DIR + "matrices/bestsnp.tsv")
+  try:
+    file = readFile(DIR + "matrices/bestsnp.tsv")
+    snpPositions = subprocess.Popen("awk \'NR > 1 {print $1}\' " + DIR + "matrices/bestsnp.tsv", universal_newlines=True, shell=True, stdout=subprocess.PIPE)
+  except:
+    file = readFile(DIR + "bestsnp.tsv")
+    snpPositions = subprocess.Popen("awk \'NR > 1 {print $1}\' " + DIR + "bestsnp.tsv", universal_newlines=True, shell=True, stdout=subprocess.PIPE)
   file = file.split("\n")[:-1]
 
   # get sample names
@@ -184,7 +189,6 @@ def naspHash(args):
   # write samples and positions to file
   print("    creating file \"./snpDensityOut/snpPositions.txt\"") 
   f = open("snpDensityOut/snpPositions.txt", 'w')
-  snpPositions = subprocess.Popen("awk \'NR > 1 {print $1}\' " + DIR + "matrices/bestsnp.tsv", universal_newlines=True, shell=True, stdout=subprocess.PIPE)
   snpPositions = snpPositions.stdout.read().split("\n")[:-1]
   for i in range(0, len(snpPositions)):
     snpPositions[i] = "::".join(snpPositions[i].split("::")[:-1]) + '\t' + snpPositions[i].split("::")[-1]

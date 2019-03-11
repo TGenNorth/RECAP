@@ -100,11 +100,6 @@ function toggleSamples() {
     for (var i = (currentPage*maxContig); i < getMax(); i++) {
       dygraphs[i].resize()
     }
-    if (currentContig != null) {
-      for (var i= 0; i < gs[currentContig].length; i++) {
-        gs[currentContig][i].resize()
-      }
-    }
   }, 300);
 }
 
@@ -319,7 +314,7 @@ function exportContig(data) {
       checkedSamples[i] = checkedSamples[i] + 1;
     }
     checkedSamples.unshift(0)
-    range = gs[currentContig][2].xAxisRange();
+    range = gs[2].xAxisRange();
     left = Math.max(Math.floor(range[0]),0);
     right = Math.min(Math.ceil(range[1]),contigs[currentContig].data.slice(-1)[0].position[1]);
     var out = [];
@@ -342,8 +337,8 @@ function exciseContig(data) {
   console.log(gs)
   if (currentContig != null) {
     console.log(gs)
-    console.log(gs)
-    range = gs[currentContig][2].xAxisRange();
+    console.log(gs[2])
+    range = gs[2].xAxisRange();
     left = Math.max(Math.floor(range[0]),0);
     right = Math.min(Math.ceil(range[1]),contigs[currentContig].data.slice(-1)[0].position[1]);
 
